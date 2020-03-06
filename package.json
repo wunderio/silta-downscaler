@@ -1,0 +1,11 @@
+{
+  "dependencies": {
+    "@kubernetes/client-node": "^0.11.0",
+    "cors": "^2.8.5",
+    "express": "^4.17.1"
+  },
+  "scripts": {
+    "start": "node index",
+    "downscale": "node downscale"
+  }
+}
