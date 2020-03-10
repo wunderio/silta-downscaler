@@ -1,4 +1,5 @@
 const k8s = require('@kubernetes/client-node');
+const moment = require('moment');
 
 const kc = new k8s.KubeConfig();
 kc.loadFromDefault();
@@ -14,7 +15,9 @@ const placeholderServiceNamespace = process.env.PLACEHOLDER_SERVICE_NAMESPACE;
     const ingresses = (await k8sExtensionsApi.listIngressForAllNamespaces()).body.items;
 
     ingresses
-      .filter(ingress => ingress.metadata.annotations && ingress.metadata.annotations['auto-downscale/deployments'])
+      .filter(ingress => ingress.metadata.annotations)
+      .filter(ingress => ingress.metadata.annotations['auto-downscale/last-update'])
+      .filter(ingress => moment(ingress.metadata.annotations['auto-downscale/last-update']).add(1, 'hour').isBefore(moment()))
       .forEach(async ingress => {
 
         const namespace = ingress.metadata.namespace;
