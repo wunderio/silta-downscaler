@@ -13,6 +13,8 @@ const k8sExtensionsApi = kc.makeApiClient(k8s.ExtensionsV1beta1Api);
 
 const placeholderDomain = process.env.PLACEHOLDER_DOMAIN;
 
+const k8sResourceManager = require('./src/k8sResourceManager');
+
 app.use(cors());
 
 /**
@@ -20,26 +22,30 @@ app.use(cors());
  */
 app.post('/upscale', async (req, res) => {
   try {
+    console.log(req.query.domain);
     const ingress = await loadIngressByHostname(req.query.domain);
 
     if (ingress) {
       const namespace = ingress.metadata.namespace;
+      const annotations = ingress.metadata.annotations;
+      const labelSelector = annotations['auto-downscale/label-selector'];
       const serviceName = ingress.metadata.annotations['auto-downscale/services'];
-      const deploymentNames = ingress.metadata.annotations['auto-downscale/deployments'].split(',');
 
-      await Promise.all(deploymentNames.map(async deploymentName => {
-        await upscaleDeployment(deploymentName, namespace);
-      }));
+      const {deployments, cronjobs, statefulsets} = await k8sResourceManager.loadResources(namespace, labelSelector);
+
+      await Promise.all([
+        ...deployments.map(deployment => k8sResourceManager.upscaleResource(deployment, 'deployment')),
+        ...cronjobs.map(cronjob => k8sResourceManager.upscaleResource(cronjob, 'cronjob')),
+        ...statefulsets.map(statefulset => k8sResourceManager.upscaleResource(statefulset, 'statefulset')),
+      ]);
 
       // Send the response immediately, before the deployments are ready.
       res.json({message: `${ingress.metadata.name} triggered`});
 
-      await Promise.all(deploymentNames.map(async deploymentName => {
-        await waitForDeploymentReady(deploymentName, namespace);
-      }));
+      await k8sResourceManager.waitForResourcesReady(namespace, labelSelector);
 
       // Once the deployments are ready, reset the service.
-      await resetService(serviceName, namespace);
+      await k8sResourceManager.resetService(serviceName, namespace);
     }
     else {
       res.sendStatus(404);
@@ -58,34 +64,17 @@ app.get('/status', async (req, res) => {
     const ingress = await loadIngressByHostname(req.query.domain);
 
     if (ingress) {
+      const annotations = ingress.metadata.annotations;
       const namespace = ingress.metadata.namespace;
-      const serviceName = ingress.metadata.annotations['auto-downscale/services'];
-      const deploymentNames = ingress.metadata.annotations['auto-downscale/deployments'].split(',');
-
-      const statusDetails = await Promise.all(
-        deploymentNames.map(async deploymentName => {
-          const deployment = (await k8sExtensionsApi.readNamespacedDeploymentStatus(deploymentName, namespace)).body;
-
-          const desiredReplicas = deployment.spec.replicas;
-          const currentReplicas = deployment.status.readyReplicas || 0;
-
-          return {
-            name: deploymentName,
-            type: 'deployment',
-            message: `${currentReplicas} / ${desiredReplicas}`,
-            desiredCount: desiredReplicas,
-            readyCount: currentReplicas,
-            isReady: currentReplicas === desiredReplicas,
-          };
-        })
-      );
-
+      const serviceName = annotations['auto-downscale/services'];
+      const labelSelector = annotations['auto-downscale/label-selector'];
+      const resourceStatus = await k8sResourceManager.loadResourcesStatus(namespace, labelSelector);
       const service = (await k8sApi.readNamespacedService(serviceName, namespace)).body;
 
       res.json({
-        details: statusDetails,
-        percentage: 100 * statusDetails.reduce((sum, detail) => sum + detail.readyCount, 0) / statusDetails.reduce((sum, detail) => sum + detail.desiredCount, 0),
-        done: statusDetails.every(detail => detail.isReady) && (!service.metadata.annotations || service.metadata.annotations['auto-downscale/down'] != 'true'),
+        done: resourceStatus.every(resource => resource.isReady) && (!service.metadata.annotations || service.metadata.annotations['auto-downscale/down'] != 'true'),
+        resourceStatus,
+        service: service.status
       });
     }
     else {
@@ -104,9 +93,11 @@ app.get('*', async (req, res) => {
     const currentIngress = await loadIngressByHostname(hostname);
 
     if (currentIngress) {
-      res.sent(placeholderPageContent(hostname, currentIngress.metadata.name));
+      console.log(`Showing placeholder for ${hostname}`)
+      res.send(placeholderPageContent(hostname, currentIngress.metadata.name));
     }
     else {
+      console.log(`No ingress found for ${hostname}`)
       res.sendStatus(404);
     }
   }
@@ -122,65 +113,8 @@ async function loadIngressByHostname(hostname) {
   return ingresses.find(ingress => ingress.spec.rules.some(rule => rule.host === hostname));
 }
 
-async function upscaleDeployment(deploymentName, namespace) {
-  const deployment = (await k8sExtensionsApi.readNamespacedDeployment(deploymentName, namespace)).body;
-  const desiredReplicas = parseInt(deployment.metadata.annotations['auto-downscale/original-replicas']) || 1;
-
-  console.log(`Requesting to scale ${deploymentName} to ${desiredReplicas} replica(s)`);
-
-  const result = await k8sExtensionsApi.patchNamespacedDeployment(deploymentName, namespace, {
-    metadata: {
-      annotations: {
-        'auto-downscale/original-replicas': null
-      }
-    },
-    spec: {
-      replicas: desiredReplicas
-    }
-  }, undefined, undefined, undefined, undefined, {
-    headers: {
-      'Content-Type': 'application/merge-patch+json'
-    }
-  });
-}
-
-async function waitForDeploymentReady(deploymentName, namespace) {
-  // TODO: find a better wait mechanism, with a timeout.
-  while (true) {
-    const deployment = (await k8sExtensionsApi.readNamespacedDeploymentStatus(deploymentName, namespace)).body;
-
-    if (deployment.status.readyReplicas == deployment.replicas) break;
-  }
-}
-
-async function resetService(serviceName, namespace) {
-  const service = (await k8sApi.readNamespacedService(serviceName, namespace)).body;
-
-  await k8sApi.patchNamespacedService(serviceName, namespace, {
-    metadata: {
-      annotations: {
-        'auto-downscale/down': null,
-        'auto-downscale/original-type': null,
-        'auto-downscale/original-selector': null
-      }
-    },
-    spec: {
-      type: service.metadata.annotations['auto-downscale/original-type'],
-      externalName: null,
-      selector: JSON.parse(service.metadata.annotations['auto-downscale/original-selector']),
-    }
-  }, undefined, undefined, undefined, undefined, {
-    headers: {
-      'Content-Type': 'application/merge-patch+json'
-    }
-  });
-
-  console.log(`Redirected service ${serviceName} to placeholder service`);
-}
-
 function placeholderPageContent(hostname, ingressName) {
-  return
-`<!DOCTYPE html>
+  return `<!DOCTYPE html>
 <html>
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -194,7 +128,7 @@ function placeholderPageContent(hostname, ingressName) {
       h2 {
           text-align: center;
           font-size: 20px;
-          margin-bottom: 10%;
+          margin: 100px;
           color: #5b37bf;
           font-weight: 800;
       }
@@ -213,34 +147,12 @@ function placeholderPageContent(hostname, ingressName) {
           font-size: 16px;
       }
       #progress {
-          height: 20px;  /* Can be anything */
-          position: relative;
-          background: #E7E6EB;
-          -moz-border-radius: 25px;
-          -webkit-border-radius: 25px;
-          border-radius: 25px;
-          box-shadow: inset 0 -1px 1px rgba(255,255,255,0.3);
-          width: 40%;
+          width: 400px;
           margin: auto;
       }
-      #progressBar {
-          display: block;
-          height: 100%;
-          width: 0%;
-          background-color: #5B37BF;
-          border-radius: 25px;
-          position: relative;
-          overflow: hidden;
-      }
-      #progressPercentage {
-          width:100%;
-          height:30px;
-          line-height:30px;
-          position:absolute;
-          top:15px;
-          left:0px;
-          color: #5B37BF;
-          font-weight: bold;
+      #progress ul {
+        list-style: none;
+        text-align: right;
       }
     </style>
     
@@ -248,34 +160,37 @@ function placeholderPageContent(hostname, ingressName) {
 <body>
 
 <h2>The environment ${ingressName} is on standby</h2>
-        <div id="progress">
-            <div id="progressBar"></div>
-            <div id="progressPercentage"></div>
-</div>
 <button id="myBtn" onclick="reLaunch()">Launch</button>
+<div id="timer"></div>
+<div id="progress"></div>
 <script>
-      document.getElementById("progress").style.display = "none";
-      
       async function reLaunch() {
-        // Hide the button and show the progress bar.
+        // Start timer
+        const start = new Date().getTime();
+        const timerHandle = setInterval(async function () {
+          const difference = new Date().getTime() - start;
+          document.getElementById("timer").innerHTML = Math.floor(difference/60000) + ':' + String(Math.floor(difference/1000) % 60).padStart(2, 0);
+        }, 1000);
+        
+        // Hide the button.
         document.getElementById("myBtn").style.display = "none";
-        document.getElementById("progress").style.display = "block";
         
         const response = await fetch('//${placeholderDomain}/upscale?domain=${hostname}', {method: 'post'});
-        console.log(response);
         
-        const Change = setInterval(async function () {
+        const progressHandle = setInterval(async function () {
           const response = await fetch('//${placeholderDomain}/status?domain=${hostname}');
           const data = await response.json();
           
           if (data.done) {
-            clearInterval(Change);
-            window.location.reload();
+            clearInterval(progressHandle);
+            setTimeout(() => {
+              document.getElementById("progress").innerHTML = 'Reloading...';
+              window.location.reload();
+            }, 2000);
           }
           else {
-            const percentage = data.percentage;
-            document.getElementById("progressPercentage").innerHTML = percentage.toString() + "%";
-            document.getElementById("progressBar").style.width = percentage + "%";
+            const details = data.resourceStatus.map(resource => '<li>' + resource.name + " " + (resource.isReady ? "✅" : "🔄") + '</li>').join('');
+            document.getElementById("progress").innerHTML = '<ul>' + details + '</ul>';
           }
         }, 5000);
       }
