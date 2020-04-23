@@ -10,6 +10,8 @@ const k8sAppApi = kc.makeApiClient(k8s.AppsV1Api);
 const placeholderServiceName = process.env.PLACEHOLDER_SERVICE_NAME;
 const placeholderServiceNamespace = process.env.PLACEHOLDER_SERVICE_NAMESPACE;
 
+const moment = require('moment');
+
 class K8sResourceManager {
   async loadResources(namespace, labelSelector) {
     try {
@@ -220,7 +222,8 @@ class K8sResourceManager {
           await api[method](name, namespace, {
             metadata: {
               annotations: {
-                'auto-downscale/original-replicas': null
+                'auto-downscale/original-replicas': null,
+                'auto-donwscale/last-update': moment().toISOString()
               }
             },
             spec: {
