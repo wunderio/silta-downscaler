@@ -218,7 +218,7 @@ class K8sResourceManager {
             method = 'patchNamespacedStatefulSet';
           }
 
-          // Downscale the deployment or statefulset.
+          // Upscale the deployment or statefulset.
           await api[method](name, namespace, {
             metadata: {
               annotations: {
