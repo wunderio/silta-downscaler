@@ -15,9 +15,10 @@ const releaseMinAge = JSON.parse(process.env.RELEASE_MIN_AGE);
   try {
     const ingresses = (await k8sExtensionsApi.listIngressForAllNamespaces()).body.items;
 
-    ingresses
+    const selectedIngresses = ingresses
       .filter(ingress => ingress.metadata.annotations)
       .filter(ingress => ingress.metadata.annotations['auto-downscale/last-update'])
+      .filter(ingress => ! ingress.metadata.annotations['auto-downscale/down'])
       .filter(ingress => {
         const lastUpdate = moment(ingress.metadata.annotations['auto-downscale/last-update']);
         const name = ingress.metadata.name;
@@ -30,19 +31,28 @@ const releaseMinAge = JSON.parse(process.env.RELEASE_MIN_AGE);
         }
 
         return lastUpdate.add(...minAge.split(/(\d+)/).filter(match => match)).isBefore(moment());
-      })
-      .forEach(async ingress => {
-        const annotations = ingress.metadata.annotations;
-        const namespace = ingress.metadata.namespace;
-        const serviceName = annotations['auto-downscale/services'];
-        const labelSelector = annotations['auto-downscale/label-selector'];
-        k8sResourceManager.redirectService(serviceName, namespace);
-
-        const {deployments, cronjobs, statefulsets} = await k8sResourceManager.loadResources(namespace, labelSelector);
-        deployments.forEach(deployment => k8sResourceManager.downscaleResource(deployment, "deployment"));
-        cronjobs.forEach(cronjob => k8sResourceManager.downscaleResource(cronjob, "cronjob"));
-        statefulsets.forEach(statefulset => k8sResourceManager.downscaleResource(statefulset, "statefulset"));
       });
+
+    for (const ingress of selectedIngresses) {
+      const annotations = ingress.metadata.annotations;
+      const name = ingress.metadata.name;
+      const namespace = ingress.metadata.namespace;
+      const serviceName = annotations['auto-downscale/services'];
+      const labelSelector = annotations['auto-downscale/label-selector'];
+      await k8sResourceManager.redirectService(serviceName, namespace);
+      await k8sResourceManager.markIngressAsDown(name, namespace);
+
+      const {deployments, cronjobs, statefulsets} = await k8sResourceManager.loadResources(namespace, labelSelector);
+      for (const deployment of deployments) {
+        await k8sResourceManager.downscaleResource(deployment, "deployment");
+      }
+      for (const cronjob of cronjobs) {
+        await k8sResourceManager.downscaleResource(cronjob, "cronjob");
+      }
+      for (const statefulset of statefulsets) {
+        await k8sResourceManager.downscaleResource(statefulset, "statefulset");
+      }
+    }
   }
   catch (e) {
     console.error(e);

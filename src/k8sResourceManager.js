@@ -121,7 +121,24 @@ class K8sResourceManager {
     await k8sExtensionsApi.patchNamespacedIngress(ingressName, namespace, {
       metadata: {
         annotations: {
-          'auto-downscale/last-update': moment().toISOString()
+          'auto-downscale/last-update': moment().toISOString(),
+          'auto-downscale/down': null,
+        }
+      },
+    }, undefined, undefined, undefined, undefined, {
+      headers: {
+        'Content-Type': 'application/merge-patch+json'
+      }
+    });
+
+    console.log(`Updated last-update annotation on ${namespace}/${ingressName} ingress`);
+  }
+
+  async markIngressAsDown(ingressName, namespace) {
+    await k8sExtensionsApi.patchNamespacedIngress(ingressName, namespace, {
+      metadata: {
+        annotations: {
+          'auto-downscale/down': 'true',
         }
       },
     }, undefined, undefined, undefined, undefined, {
