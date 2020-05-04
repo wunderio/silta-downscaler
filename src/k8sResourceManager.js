@@ -84,11 +84,11 @@ class K8sResourceManager {
           }
         });
 
-        console.log(`Redirected service ${serviceName} to placeholder service`);
+        console.log(`Redirected service ${namespace}/${serviceName} to placeholder service`);
       }
     }
     catch (error) {
-      console.error(`Error updating ${serviceName}`, error);
+      console.error(`Error updating ${namespace}/${serviceName}`, error);
     }
   };
 
@@ -114,7 +114,7 @@ class K8sResourceManager {
       }
     });
 
-    console.log(`Redirected service ${serviceName} to placeholder service`);
+    console.log(`Reset service ${namespace}/${serviceName} to original service`);
   }
 
   async updateIngressLastUpdate(ingressName, namespace) {
@@ -130,7 +130,7 @@ class K8sResourceManager {
       }
     });
 
-    console.log(`Updated last-update annotation on ${ingressName} ingress`);
+    console.log(`Marked ingress ${namespace}/${ingressName} as down`);
   }
 
   async getResourceStatus(resource, kind) {
@@ -188,7 +188,7 @@ class K8sResourceManager {
             }
           });
 
-          console.log(`Downscaled ${kind} ${name} from ${replicas} to 0`);
+          console.log(`Downscaled ${kind} ${namespace}/${name} from ${replicas} to 0`);
         }
       }
       else if (kind === 'cronjob') {
@@ -203,12 +203,12 @@ class K8sResourceManager {
               'Content-Type': 'application/merge-patch+json'
             }
           });
-          console.log(`Suspended cronjob ${name}`);
+          console.log(`Suspended cronjob ${namespace}/${name}`);
         }
       }
     }
     catch (error) {
-      console.error(`Error while downscaling ${kind} ${name}`, error.message);
+      console.error(`Error while downscaling ${kind} ${namespace}/${name}`, error.message);
     }
   };
 
@@ -250,7 +250,7 @@ class K8sResourceManager {
             }
           });
 
-          console.log(`Upscaled ${kind} ${name} from 0 to ${originalReplicas}`);
+          console.log(`Upscaled ${kind} ${namespace}/${name} from 0 to ${originalReplicas}`);
         }
       }
       else if (kind === 'cronjob') {
@@ -265,12 +265,12 @@ class K8sResourceManager {
               'Content-Type': 'application/merge-patch+json'
             }
           });
-          console.log(`Unsuspended cronjob ${name}`);
+          console.log(`Unsuspended cronjob ${namespace}/${name}`);
         }
       }
     }
     catch (error) {
-      console.error(`Error while downscaling ${kind} ${name}`, error.message);
+      console.error(`Error while downscaling ${kind} ${namespace}/${name}`, error.message);
     }
   };
 };
