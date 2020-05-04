@@ -26,6 +26,7 @@ app.post('/upscale', async (req, res) => {
     const ingress = await loadIngressByHostname(req.query.domain);
 
     if (ingress) {
+      const name = ingress.metadata.name;
       const namespace = ingress.metadata.namespace;
       const annotations = ingress.metadata.annotations;
       const labelSelector = annotations['auto-downscale/label-selector'];
@@ -37,6 +38,7 @@ app.post('/upscale', async (req, res) => {
         ...deployments.map(deployment => k8sResourceManager.upscaleResource(deployment, 'deployment')),
         ...cronjobs.map(cronjob => k8sResourceManager.upscaleResource(cronjob, 'cronjob')),
         ...statefulsets.map(statefulset => k8sResourceManager.upscaleResource(statefulset, 'statefulset')),
+        k8sResourceManager.updateIngressLastUpdate(name, namespace)
       ]);
 
       // Send the response immediately, before the deployments are ready.

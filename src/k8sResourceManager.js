@@ -117,11 +117,27 @@ class K8sResourceManager {
     console.log(`Redirected service ${serviceName} to placeholder service`);
   }
 
+  async updateIngressLastUpdate(ingressName, namespace) {
+    await k8sExtensionsApi.patchNamespacedIngress(ingressName, namespace, {
+      metadata: {
+        annotations: {
+          'auto-downscale/last-update': moment().toISOString()
+        }
+      },
+    }, undefined, undefined, undefined, undefined, {
+      headers: {
+        'Content-Type': 'application/merge-patch+json'
+      }
+    });
+
+    console.log(`Updated last-update annotation on ${ingressName} ingress`);
+  }
+
   async getResourceStatus(resource, kind) {
     const name = resource.metadata.name;
 
     // TODO: use class name instead of explicit "kind" parameter
-    console.log(resource.constructor.name);
+    // console.log(resource.constructor.name);
 
     const desiredReplicas = resource.spec.replicas;
     const currentReplicas = resource.status.readyReplicas || 0;
@@ -222,8 +238,7 @@ class K8sResourceManager {
           await api[method](name, namespace, {
             metadata: {
               annotations: {
-                'auto-downscale/original-replicas': null,
-                'auto-donwscale/last-update': moment().toISOString()
+                'auto-downscale/original-replicas': null
               }
             },
             spec: {
