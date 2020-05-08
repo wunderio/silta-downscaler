@@ -61,7 +61,7 @@ app.post('/upscale', async (req, res) => {
 /**
  * Get the upscaling status of an application.
  */
-app.get('/status', async (req, res) => {
+app.get('/status', async (req, res) => {z
   try {
     const ingress = await loadIngressByHostname(req.query.domain);
 
@@ -89,6 +89,8 @@ app.get('/status', async (req, res) => {
 });
 
 app.get('*', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+
   try {
     // Strip off the port when used locally.
     const hostname = req.headers.host.replace(':3000', '');
