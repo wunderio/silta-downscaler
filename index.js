@@ -61,7 +61,7 @@ app.post('/upscale', async (req, res) => {
 /**
  * Get the upscaling status of an application.
  */
-app.get('/status', async (req, res) => {z
+app.get('/status', async (req, res) => {
   try {
     const ingress = await loadIngressByHostname(req.query.domain);
 
