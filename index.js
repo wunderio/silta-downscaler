@@ -158,6 +158,44 @@ function placeholderPageContent(hostname, ingressName) {
         list-style: none;
         text-align: right;
       }
+      /* Source of spinner: https://loading.io/css/ */
+      .lds-ring {
+        display: inline-block;
+        position: relative;
+        width: 1.3em;
+        height: 1.3em;
+        margin-right: 1px;
+      }
+      .lds-ring div {
+        box-sizing: border-box;
+        display: block;
+        position: absolute;
+        width: 1em;
+        height: 1em;
+        margin: 2px;
+        border: 2px solid #5b37bf;
+        border-radius: 50%;
+        animation: lds-ring 1.8s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+        border-color: #5b37bf transparent transparent transparent;
+      }
+      .lds-ring div:nth-child(1) {
+        animation-delay: -0.45s;
+      }
+      .lds-ring div:nth-child(2) {
+        animation-delay: -0.3s;
+      }
+      .lds-ring div:nth-child(3) {
+        animation-delay: -0.15s;
+      }
+      @keyframes lds-ring {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
     </style>
     
 </head>
@@ -193,7 +231,7 @@ function placeholderPageContent(hostname, ingressName) {
             }, 2000);
           }
           else {
-            const details = data.resourceStatus.map(resource => '<li>' + resource.name + " " + (resource.isReady ? "✅" : "🔄") + '</li>').join('');
+            const details = data.resourceStatus.map(resource => '<li>' + resource.name + " " + (resource.isReady ? "✅" : '<div class="lds-ring"><div></div><div></div><div></div><div></div></div>') + '</li>').join('');
             document.getElementById("progress").innerHTML = '<ul>' + details + '</ul>';
           }
         }, 5000);
