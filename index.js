@@ -9,7 +9,7 @@ const kc = new k8s.KubeConfig();
 kc.loadFromDefault();
 
 const k8sApi = kc.makeApiClient(k8s.CoreV1Api);
-const k8sExtensionsApi = kc.makeApiClient(k8s.ExtensionsV1beta1Api);
+const k8sNetworkApi = kc.makeApiClient(k8s.NetworkingV1beta1Api);
 
 const placeholderDomain = process.env.PLACEHOLDER_DOMAIN;
 
@@ -113,7 +113,7 @@ app.get('*', async (req, res) => {
 app.listen(port, () => console.log(`Example app listening on port ${port}!`));
 
 async function loadIngressByHostname(hostname) {
-  const ingresses = (await k8sExtensionsApi.listIngressForAllNamespaces()).body.items;
+  const ingresses = (await k8sNetworkApi.listIngressForAllNamespaces()).body.items;
   return ingresses.find(ingress => ingress.spec.rules.some(rule => rule.host === hostname));
 }
 

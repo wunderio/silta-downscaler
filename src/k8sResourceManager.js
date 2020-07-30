@@ -3,7 +3,7 @@ const kc = new k8s.KubeConfig();
 kc.loadFromDefault();
 
 const k8sApi = kc.makeApiClient(k8s.CoreV1Api);
-const k8sExtensionsApi = kc.makeApiClient(k8s.ExtensionsV1beta1Api);
+const k8sNetworkApi = kc.makeApiClient(k8s.NetworkingV1beta1Api);
 const k8sBatchApi = kc.makeApiClient(k8s.BatchV1beta1Api);
 const k8sAppApi = kc.makeApiClient(k8s.AppsV1Api);
 
@@ -15,7 +15,7 @@ const moment = require('moment');
 class K8sResourceManager {
   async loadResources(namespace, labelSelector) {
     try {
-      const deployments = (await k8sExtensionsApi.listNamespacedDeployment(namespace, null, null, null, null, labelSelector)).body.items;
+      const deployments = (await k8sAppApi.listNamespacedDeployment(namespace, null, null, null, null, labelSelector)).body.items;
       const cronjobs = (await k8sBatchApi.listNamespacedCronJob(namespace, null, null, null, null, labelSelector)).body.items;
       const statefulsets = (await k8sAppApi.listNamespacedStatefulSet(namespace, null, null, null, null, labelSelector)).body.items;
 
@@ -118,7 +118,7 @@ class K8sResourceManager {
   }
 
   async updateIngressLastUpdate(ingressName, namespace) {
-    await k8sExtensionsApi.patchNamespacedIngress(ingressName, namespace, {
+    await k8sNetworkApi.patchNamespacedIngress(ingressName, namespace, {
       metadata: {
         annotations: {
           'auto-downscale/last-update': moment().toISOString(),
@@ -135,7 +135,7 @@ class K8sResourceManager {
   }
 
   async markIngressAsDown(ingressName, namespace) {
-    await k8sExtensionsApi.patchNamespacedIngress(ingressName, namespace, {
+    await k8sNetworkApi.patchNamespacedIngress(ingressName, namespace, {
       metadata: {
         annotations: {
           'auto-downscale/down': 'true',
@@ -179,18 +179,16 @@ class K8sResourceManager {
         const replicas = resource.spec.replicas;
 
         if (replicas > 0) {
-          let api, method;
+          let method;
           if (kind === 'deployment') {
-            api = k8sExtensionsApi;
             method = 'patchNamespacedDeployment';
           }
           else {
-            api = k8sAppApi;
             method = 'patchNamespacedStatefulSet';
           }
 
           // Downscale the deployment or statefulset.
-          await api[method](name, namespace, {
+          await k8sAppApi[method](name, namespace, {
             metadata: {
               annotations: {
                 'auto-downscale/original-replicas': `${replicas}`
@@ -241,18 +239,16 @@ class K8sResourceManager {
         console.log(`Requesting to scale ${resource.metadata.name} to ${originalReplicas} replica(s)`);
 
         if (originalReplicas != replicas) {
-          let api, method;
+          let method;
           if (kind === 'deployment') {
-            api = k8sExtensionsApi;
             method = 'patchNamespacedDeployment';
           }
           else {
-            api = k8sAppApi;
             method = 'patchNamespacedStatefulSet';
           }
 
           // Upscale the deployment or statefulset.
-          await api[method](name, namespace, {
+          await k8sAppApi[method](name, namespace, {
             metadata: {
               annotations: {
                 'auto-downscale/original-replicas': null
