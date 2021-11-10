@@ -7,6 +7,7 @@ const k8s = require('@kubernetes/client-node');
 
 const kc = new k8s.KubeConfig();
 kc.loadFromDefault();
+console.log(kc.currentContext);
 
 const k8sApi = kc.makeApiClient(k8s.CoreV1Api);
 const k8sNetworkApi = kc.makeApiClient(k8s.NetworkingV1beta1Api);
@@ -32,7 +33,7 @@ app.post('/upscale', async (req, res) => {
       const labelSelector = annotations['auto-downscale/label-selector'];
       const serviceName = ingress.metadata.annotations['auto-downscale/services'];
 
-      const {deployments, cronjobs, statefulsets} = await k8sResourceManager.loadResources(namespace, labelSelector);
+      const {deployments, cronjobs, statefulsets} = await k8sResourceManager.extractScalableResourcesFromIngress(ingress);
 
       await Promise.all([
         ...deployments.map(deployment => k8sResourceManager.upscaleResource(deployment, 'deployment')),

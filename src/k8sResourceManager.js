@@ -172,6 +172,8 @@ class K8sResourceManager {
 
   async downscaleResource(resource, kind) {
     const name = resource.metadata.name;
+    console.log(name);
+    return;
     const namespace = resource.metadata.namespace;
     try {
 
@@ -286,6 +288,59 @@ class K8sResourceManager {
       console.error(`Error while downscaling ${kind} ${namespace}/${name}`, error.message);
     }
   };
+
+  async extractScalableResourcesFromIngress(ingress) {
+    try {
+      const labels = ingress.metadata.labels;
+      const labelSelector1 = labels['release'];
+      const labelSelector2 = labels['app.kubernetes.io/instance'];
+      const namespace = ingress.metadata.namespace;
+
+      var {deployments, cronjobs, statefulsets} = await this.loadResources(namespace, 'release='+labelSelector1).then();
+      const deployments1 = deployments;
+      const cj1 = cronjobs;
+      const sts1 = statefulsets;
+
+      var {deployments, cronjobs, statefulsets} = await this.loadResources(namespace, 'app.kubernetes.io/instance='+labelSelector2);
+      const deployments2 = deployments;
+      const cj2 = cronjobs;
+      const sts2 = statefulsets;
+
+      var all_deployments = deployments1.concat(deployments2);
+      all_deployments = all_deployments.filter((deployment, index, self) =>
+        index === self.findIndex((t) => (
+          t.metadata.uid === deployment.metadata.uid
+        ))
+      )
+
+      var all_cjs = cj1.concat(cj2);
+      all_cjs = all_cjs.filter((cronjob, index, self) =>
+        index === self.findIndex((t) => (
+          t.metadata.uid === cronjob.metadata.uid
+        ))
+      )
+
+      var all_stss = sts1.concat(sts2);
+      all_stss = all_stss.filter((statefulset, index, self) =>
+        index === self.findIndex((t) => (
+          t.metadata.uid === statefulset.metadata.uid
+        ))
+      )
+
+      var deployments = all_deployments;
+      var cronjobs = all_cjs;
+      var statefulsets = all_stss;
+
+      return {
+        deployments,
+        cronjobs,
+        statefulsets
+      }
+    } catch (error) {
+      console.error(`Error loading resources from ingress ${ingress.metadata.name}`, error);
+    }
+  }
+  
 };
 
 module.exports = new K8sResourceManager();
