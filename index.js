@@ -7,7 +7,6 @@ const k8s = require('@kubernetes/client-node');
 
 const kc = new k8s.KubeConfig();
 kc.loadFromDefault();
-console.log(kc.currentContext);
 
 const k8sApi = kc.makeApiClient(k8s.CoreV1Api);
 const k8sNetworkApi = kc.makeApiClient(k8s.NetworkingV1beta1Api);

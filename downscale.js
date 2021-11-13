@@ -11,7 +11,6 @@ const k8sResourceManager = require('./src/k8sResourceManager');
 const defaultMinAge = process.env.DEFAULT_MIN_AGE;
 const releaseMinAge = JSON.parse(process.env.RELEASE_MIN_AGE);
 
-
 (async function main() {
   try {
 
