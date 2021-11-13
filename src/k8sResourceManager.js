@@ -172,8 +172,6 @@ class K8sResourceManager {
 
   async downscaleResource(resource, kind) {
     const name = resource.metadata.name;
-    console.log(name);
-    return;
     const namespace = resource.metadata.namespace;
     try {
 
@@ -292,16 +290,16 @@ class K8sResourceManager {
   async extractScalableResourcesFromIngress(ingress) {
     try {
       const labels = ingress.metadata.labels;
-      const labelSelector1 = labels['release'];
-      const labelSelector2 = labels['app.kubernetes.io/instance'];
+      const labelSelector1 = 'release='+labels['release'];
+      const labelSelector2 = 'app.kubernetes.io/instance='+labels['app.kubernetes.io/instance'];
       const namespace = ingress.metadata.namespace;
 
-      var {deployments, cronjobs, statefulsets} = await this.loadResources(namespace, 'release='+labelSelector1).then();
+      var {deployments, cronjobs, statefulsets} = await this.loadResources(namespace, labelSelector1);
       const deployments1 = deployments;
       const cj1 = cronjobs;
       const sts1 = statefulsets;
 
-      var {deployments, cronjobs, statefulsets} = await this.loadResources(namespace, 'app.kubernetes.io/instance='+labelSelector2);
+      var {deployments, cronjobs, statefulsets} = await this.loadResources(namespace, labelSelector2);
       const deployments2 = deployments;
       const cj2 = cronjobs;
       const sts2 = statefulsets;
