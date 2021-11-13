@@ -14,7 +14,7 @@ const releaseMinAge = JSON.parse(process.env.RELEASE_MIN_AGE);
 
 (async function main() {
   try {
-  
+
     const ingresses = (await k8sNetworkApi.listIngressForAllNamespaces()).body.items;
     const selectedIngresses = ingresses
       .filter(ingress => ingress.metadata.annotations)
@@ -24,13 +24,12 @@ const releaseMinAge = JSON.parse(process.env.RELEASE_MIN_AGE);
         const lastUpdate = moment(ingress.metadata.annotations['auto-downscale/last-update']);
         const name = ingress.metadata.name;
         let minAge = defaultMinAge;
-    
         for (let regex in releaseMinAge) {
           if (name.match(new RegExp(regex))) {
             minAge = releaseMinAge[regex];
           }
         }
-    
+
         return lastUpdate.add(...minAge.split(/(\d+)/).filter(match => match)).isBefore(moment());
       });
 
