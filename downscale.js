@@ -13,8 +13,8 @@ const releaseMinAge = JSON.parse(process.env.RELEASE_MIN_AGE);
 
 (async function main() {
   try {
-    const ingresses = (await k8sNetworkApi.listIngressForAllNamespaces()).body.items;
 
+    const ingresses = (await k8sNetworkApi.listIngressForAllNamespaces()).body.items;
     const selectedIngresses = ingresses
       .filter(ingress => ingress.metadata.annotations)
       .filter(ingress => ingress.metadata.annotations['auto-downscale/last-update'])
@@ -23,7 +23,6 @@ const releaseMinAge = JSON.parse(process.env.RELEASE_MIN_AGE);
         const lastUpdate = moment(ingress.metadata.annotations['auto-downscale/last-update']);
         const name = ingress.metadata.name;
         let minAge = defaultMinAge;
-
         for (let regex in releaseMinAge) {
           if (name.match(new RegExp(regex))) {
             minAge = releaseMinAge[regex];
@@ -41,8 +40,7 @@ const releaseMinAge = JSON.parse(process.env.RELEASE_MIN_AGE);
       const labelSelector = annotations['auto-downscale/label-selector'];
       await k8sResourceManager.redirectService(serviceName, namespace);
       await k8sResourceManager.markIngressAsDown(name, namespace);
-
-      const {deployments, cronjobs, statefulsets} = await k8sResourceManager.loadResources(namespace, labelSelector);
+      const {deployments, cronjobs, statefulsets} = await k8sResourceManager.extractScalableResourcesFromIngress(ingress);
       for (const deployment of deployments) {
         await k8sResourceManager.downscaleResource(deployment, "deployment");
       }

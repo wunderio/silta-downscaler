@@ -22,7 +22,6 @@ app.use(cors());
  */
 app.post('/upscale', async (req, res) => {
   try {
-    console.log(req.query.domain);
     const ingress = await loadIngressByHostname(req.query.domain);
 
     if (ingress) {
@@ -32,7 +31,7 @@ app.post('/upscale', async (req, res) => {
       const labelSelector = annotations['auto-downscale/label-selector'];
       const serviceName = ingress.metadata.annotations['auto-downscale/services'];
 
-      const {deployments, cronjobs, statefulsets} = await k8sResourceManager.loadResources(namespace, labelSelector);
+      const {deployments, cronjobs, statefulsets} = await k8sResourceManager.extractScalableResourcesFromIngress(ingress);
 
       await Promise.all([
         ...deployments.map(deployment => k8sResourceManager.upscaleResource(deployment, 'deployment')),
@@ -45,6 +44,9 @@ app.post('/upscale', async (req, res) => {
       res.json({message: `${ingress.metadata.name} triggered`});
 
       await k8sResourceManager.waitForResourcesReady(namespace, labelSelector);
+      var labelSelector2 = labelSelector.replace("release=","");
+      labelSelector2 = 'app.kubernetes.io/instance='+labelSelector2;
+      await k8sResourceManager.waitForResourcesReady(namespace, labelSelector2);
 
       // Once the deployments are ready, reset the service.
       await k8sResourceManager.resetService(serviceName, namespace);
@@ -71,10 +73,12 @@ app.get('/status', async (req, res) => {
       const serviceName = annotations['auto-downscale/services'];
       const labelSelector = annotations['auto-downscale/label-selector'];
       const resourceStatus = await k8sResourceManager.loadResourcesStatus(namespace, labelSelector);
+      var labelSelector2 = labelSelector.replace("release=","");
+      const resourceStatus2 = await k8sResourceManager.loadResourcesStatus(namespace, 'app.kubernetes.io/instance='+labelSelector2);
       const service = (await k8sApi.readNamespacedService(serviceName, namespace)).body;
 
       res.json({
-        done: resourceStatus.every(resource => resource.isReady) && (!service.metadata.annotations || service.metadata.annotations['auto-downscale/down'] != 'true'),
+        done: resourceStatus.every(resource => resource.isReady) && resourceStatus2.every(resource => resource.isReady) && (!service.metadata.annotations || service.metadata.annotations['auto-downscale/down'] != 'true'),
         resourceStatus,
         service: service.status
       });
