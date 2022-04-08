@@ -28,28 +28,36 @@ app.post('/upscale', async (req, res) => {
       const name = ingress.metadata.name;
       const namespace = ingress.metadata.namespace;
       const annotations = ingress.metadata.annotations;
-      const labelSelector = annotations['auto-downscale/label-selector'];
-      const serviceName = ingress.metadata.annotations['auto-downscale/services'];
+      
+      if (annotations['auto-downscale/down']) {
 
-      const {deployments, cronjobs, statefulsets} = await k8sResourceManager.extractScalableResourcesFromIngress(ingress);
+        const labelSelector = annotations['auto-downscale/label-selector'];
+        const serviceName = ingress.metadata.annotations['auto-downscale/services'];
 
-      await Promise.all([
-        ...deployments.map(deployment => k8sResourceManager.upscaleResource(deployment, 'deployment')),
-        ...cronjobs.map(cronjob => k8sResourceManager.upscaleResource(cronjob, 'cronjob')),
-        ...statefulsets.map(statefulset => k8sResourceManager.upscaleResource(statefulset, 'statefulset')),
-        k8sResourceManager.updateIngressLastUpdate(name, namespace)
-      ]);
+        const {deployments, cronjobs, statefulsets} = await k8sResourceManager.extractScalableResourcesFromIngress(ingress);
 
-      // Send the response immediately, before the deployments are ready.
-      res.json({message: `${ingress.metadata.name} triggered`});
+        await Promise.all([
+          ...deployments.map(deployment => k8sResourceManager.upscaleResource(deployment, 'deployment')),
+          ...cronjobs.map(cronjob => k8sResourceManager.upscaleResource(cronjob, 'cronjob')),
+          ...statefulsets.map(statefulset => k8sResourceManager.upscaleResource(statefulset, 'statefulset')),
+          k8sResourceManager.updateIngressLastUpdate(name, namespace)
+        ]);
 
-      await k8sResourceManager.waitForResourcesReady(namespace, labelSelector);
-      var labelSelector2 = labelSelector.replace("release=","");
-      labelSelector2 = 'app.kubernetes.io/instance='+labelSelector2;
-      await k8sResourceManager.waitForResourcesReady(namespace, labelSelector2);
+        // Send the response immediately, before the deployments are ready.
+        res.json({message: `${ingress.metadata.name} triggered`});
 
-      // Once the deployments are ready, reset the service.
-      await k8sResourceManager.resetService(serviceName, namespace);
+        await k8sResourceManager.waitForResourcesReady(namespace, labelSelector);
+        var labelSelector2 = labelSelector.replace("release=","");
+        labelSelector2 = 'app.kubernetes.io/instance='+labelSelector2;
+        await k8sResourceManager.waitForResourcesReady(namespace, labelSelector2);
+
+        // Once the deployments are ready, reset the service.
+        await k8sResourceManager.resetService(serviceName, namespace);
+      }
+      else {
+        console.log(`Someone tried to upscale ${req.query.domain} via ingress/${name}`)
+        res.sendStatus(404);
+      }
     }
     else {
       res.sendStatus(404);
@@ -69,19 +77,25 @@ app.get('/status', async (req, res) => {
 
     if (ingress) {
       const annotations = ingress.metadata.annotations;
-      const namespace = ingress.metadata.namespace;
-      const serviceName = annotations['auto-downscale/services'];
-      const labelSelector = annotations['auto-downscale/label-selector'];
-      const resourceStatus = await k8sResourceManager.loadResourcesStatus(namespace, labelSelector);
-      var labelSelector2 = labelSelector.replace("release=","");
-      const resourceStatus2 = await k8sResourceManager.loadResourcesStatus(namespace, 'app.kubernetes.io/instance='+labelSelector2);
-      const service = (await k8sApi.readNamespacedService(serviceName, namespace)).body;
+      
+      if (annotations['auto-downscale/down']) {
+        const namespace = ingress.metadata.namespace;
+        const serviceName = annotations['auto-downscale/services'];
+        const labelSelector = annotations['auto-downscale/label-selector'];
+        const resourceStatus = await k8sResourceManager.loadResourcesStatus(namespace, labelSelector);
+        var labelSelector2 = labelSelector.replace("release=","");
+        const resourceStatus2 = await k8sResourceManager.loadResourcesStatus(namespace, 'app.kubernetes.io/instance='+labelSelector2);
+        const service = (await k8sApi.readNamespacedService(serviceName, namespace)).body;
 
-      res.json({
-        done: resourceStatus.every(resource => resource.isReady) && resourceStatus2.every(resource => resource.isReady) && (!service.metadata.annotations || service.metadata.annotations['auto-downscale/down'] != 'true'),
-        resourceStatus,
-        service: service.status
-      });
+        res.json({
+          done: resourceStatus.every(resource => resource.isReady) && resourceStatus2.every(resource => resource.isReady) && (!service.metadata.annotations || service.metadata.annotations['auto-downscale/down'] != 'true'),
+          resourceStatus,
+          service: service.status
+        });
+      }
+      else {
+        res.sendStatus(404);
+      }
     }
     else {
       res.sendStatus(404);
@@ -99,10 +113,17 @@ app.get('*', async (req, res) => {
     // Strip off the port when used locally.
     const hostname = req.headers.host.replace(':3000', '');
     const currentIngress = await loadIngressByHostname(hostname);
-
+    const annotations = currentIngress.metadata.annotations;
+    
     if (currentIngress) {
-      console.log(`Showing placeholder for ${hostname}`)
-      res.send(placeholderPageContent(hostname, currentIngress.metadata.name));
+      if (annotations['auto-downscale/down']) {
+        console.log(`Showing placeholder for ${hostname}`)
+        res.send(placeholderPageContent(hostname, currentIngress.metadata.name));
+      }
+      else {
+        console.log(`Non-downscalable ingress for ${hostname}`)
+        res.sendStatus(404);
+      }
     }
     else {
       console.log(`No ingress found for ${hostname}`)
