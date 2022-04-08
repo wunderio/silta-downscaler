@@ -113,15 +113,13 @@ app.get('*', async (req, res) => {
     // Strip off the port when used locally.
     const hostname = req.headers.host.replace(':3000', '');
     const currentIngress = await loadIngressByHostname(hostname);
-    const annotations = currentIngress.metadata.annotations;
-    
     if (currentIngress) {
+      const annotations = currentIngress.metadata.annotations;
       if (annotations['auto-downscale/down']) {
         console.log(`Showing placeholder for ${hostname}`)
         res.send(placeholderPageContent(hostname, currentIngress.metadata.name));
       }
       else {
-        console.log(`Non-downscalable ingress for ${hostname}`)
         res.sendStatus(404);
       }
     }
