@@ -11,6 +11,7 @@ const placeholderServiceName = process.env.PLACEHOLDER_SERVICE_NAME;
 const placeholderServiceNamespace = process.env.PLACEHOLDER_SERVICE_NAMESPACE;
 
 const moment = require('moment');
+const crypto = require('crypto')
 
 class K8sResourceManager {
   async loadResources(namespace, labelSelector) {
@@ -158,9 +159,10 @@ class K8sResourceManager {
 
     const desiredReplicas = resource.spec.replicas;
     const currentReplicas = resource.status.readyReplicas || 0;
+    const name_hash = crypto.createHash('md5').update(name).digest("hex")
 
     return {
-      name: name,
+      name: name_hash,
       type: kind,
       message: `${currentReplicas} / ${desiredReplicas}`,
       desiredCount: desiredReplicas,

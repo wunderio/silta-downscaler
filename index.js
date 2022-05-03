@@ -78,24 +78,20 @@ app.get('/status', async (req, res) => {
     if (ingress) {
       const annotations = ingress.metadata.annotations;
       
-      if (annotations['auto-downscale/down']) {
-        const namespace = ingress.metadata.namespace;
-        const serviceName = annotations['auto-downscale/services'];
-        const labelSelector = annotations['auto-downscale/label-selector'];
-        const resourceStatus = await k8sResourceManager.loadResourcesStatus(namespace, labelSelector);
-        var labelSelector2 = labelSelector.replace("release=","");
-        const resourceStatus2 = await k8sResourceManager.loadResourcesStatus(namespace, 'app.kubernetes.io/instance='+labelSelector2);
-        const service = (await k8sApi.readNamespacedService(serviceName, namespace)).body;
+      const namespace = ingress.metadata.namespace;
+      const serviceName = annotations['auto-downscale/services'];
+      const labelSelector = annotations['auto-downscale/label-selector'];
+      const resourceStatus = await k8sResourceManager.loadResourcesStatus(namespace, labelSelector);
+      var labelSelector2 = labelSelector.replace("release=","");
+      const resourceStatus2 = await k8sResourceManager.loadResourcesStatus(namespace, 'app.kubernetes.io/instance='+labelSelector2);
+      const service = (await k8sApi.readNamespacedService(serviceName, namespace)).body;
 
-        res.json({
-          done: resourceStatus.every(resource => resource.isReady) && resourceStatus2.every(resource => resource.isReady) && (!service.metadata.annotations || service.metadata.annotations['auto-downscale/down'] != 'true'),
-          resourceStatus,
-          service: service.status
-        });
-      }
-      else {
-        res.sendStatus(404);
-      }
+      res.json({
+        done: resourceStatus.every(resource => resource.isReady) && resourceStatus2.every(resource => resource.isReady) && (!service.metadata.annotations || service.metadata.annotations['auto-downscale/down'] != 'true'),
+        resourceStatus,
+        service: service.status
+      });
+
     }
     else {
       res.sendStatus(404);
