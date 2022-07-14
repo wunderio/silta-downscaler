@@ -46,8 +46,8 @@ class K8sResourceManager {
         const intervalHandle = setInterval(async () => {
           const resourceStatus = await this.loadResourcesStatus(namespace, labelSelector);
 
-          console.log(resourceStatus);
           if (resourceStatus.every(resource => resource.isReady)) {
+            console.log("%s/%s selector resources are ready", namespace, labelSelector)
             clearInterval(intervalHandle);
             resolve();
           }
