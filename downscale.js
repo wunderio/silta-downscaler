@@ -18,7 +18,7 @@ const releaseMinAge = JSON.parse(process.env.RELEASE_MIN_AGE);
     const selectedIngresses = ingresses
       .filter(ingress => ingress.metadata.annotations)
       .filter(ingress => ingress.metadata.annotations['auto-downscale/last-update'])
-      .filter(ingress => ! ingress.metadata.annotations['auto-downscale/down'])
+      .filter(ingress => ! ingress.metadata.annotations['auto-downscale/down'] || ingress.metadata.annotations['auto-downscale/down'] == "false")
       .filter(ingress => {
         const lastUpdate = moment(ingress.metadata.annotations['auto-downscale/last-update']);
         const name = ingress.metadata.name;
@@ -28,7 +28,6 @@ const releaseMinAge = JSON.parse(process.env.RELEASE_MIN_AGE);
             minAge = releaseMinAge[regex];
           }
         }
-
         return lastUpdate.add(...minAge.split(/(\d+)/).filter(match => match)).isBefore(moment());
       });
 
