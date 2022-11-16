@@ -9,7 +9,7 @@ const kc = new k8s.KubeConfig();
 kc.loadFromDefault();
 
 const k8sApi = kc.makeApiClient(k8s.CoreV1Api);
-const k8sNetworkApi = kc.makeApiClient(k8s.NetworkingV1beta1Api);
+const k8sNetworkApi = kc.makeApiClient(k8s.NetworkingV1Api);
 
 const placeholderDomain = process.env.PLACEHOLDER_DOMAIN;
 
