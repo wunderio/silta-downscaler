@@ -4,7 +4,7 @@ const moment = require('moment');
 const kc = new k8s.KubeConfig();
 kc.loadFromDefault();
 
-const k8sNetworkApi = kc.makeApiClient(k8s.NetworkingV1beta1Api);
+const k8sNetworkApi = kc.makeApiClient(k8s.NetworkingV1Api);
 
 const k8sResourceManager = require('./src/k8sResourceManager');
 

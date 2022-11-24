@@ -3,8 +3,8 @@ const kc = new k8s.KubeConfig();
 kc.loadFromDefault();
 
 const k8sApi = kc.makeApiClient(k8s.CoreV1Api);
-const k8sNetworkApi = kc.makeApiClient(k8s.NetworkingV1beta1Api);
-const k8sBatchApi = kc.makeApiClient(k8s.BatchV1beta1Api);
+const k8sNetworkApi = kc.makeApiClient(k8s.NetworkingV1Api);
+const k8sBatchApi = kc.makeApiClient(k8s.BatchV1Api);
 const k8sAppApi = kc.makeApiClient(k8s.AppsV1Api);
 
 const placeholderServiceName = process.env.PLACEHOLDER_SERVICE_NAME;
@@ -79,7 +79,7 @@ class K8sResourceManager {
             clusterIP: null,
             selector: null,
           }
-        }, undefined, undefined, undefined, undefined, {
+        }, undefined, undefined, undefined, undefined, undefined, {
           headers: {
             'Content-Type': 'application/merge-patch+json'
           }
@@ -109,7 +109,7 @@ class K8sResourceManager {
         externalName: null,
         selector: JSON.parse(service.metadata.annotations['auto-downscale/original-selector']),
       }
-    }, undefined, undefined, undefined, undefined, {
+    }, undefined, undefined, undefined, undefined, undefined, {
       headers: {
         'Content-Type': 'application/merge-patch+json'
       }
@@ -126,7 +126,7 @@ class K8sResourceManager {
           'auto-downscale/down': null,
         }
       },
-    }, undefined, undefined, undefined, undefined, {
+    }, undefined, undefined, undefined, undefined, undefined, {
       headers: {
         'Content-Type': 'application/merge-patch+json'
       }
@@ -142,7 +142,7 @@ class K8sResourceManager {
           'auto-downscale/down': 'true',
         }
       },
-    }, undefined, undefined, undefined, undefined, {
+    }, undefined, undefined, undefined, undefined, undefined, {
       headers: {
         'Content-Type': 'application/merge-patch+json'
       }
@@ -199,7 +199,7 @@ class K8sResourceManager {
             spec: {
               replicas: 0
             }
-          }, undefined, undefined, undefined, undefined, {
+          }, undefined, undefined, undefined, undefined, undefined, {
             headers: {
               'Content-Type': 'application/merge-patch+json'
             }
@@ -215,7 +215,7 @@ class K8sResourceManager {
             spec: {
               suspend: true
             }
-          }, undefined, undefined, undefined, undefined, {
+          }, undefined, undefined, undefined, undefined, undefined, {
             headers: {
               'Content-Type': 'application/merge-patch+json'
             }
@@ -259,7 +259,7 @@ class K8sResourceManager {
             spec: {
               replicas: originalReplicas
             }
-          }, undefined, undefined, undefined, undefined, {
+          }, undefined, undefined, undefined, undefined, undefined, {
             headers: {
               'Content-Type': 'application/merge-patch+json'
             }
@@ -275,7 +275,7 @@ class K8sResourceManager {
             spec: {
               suspend: false
             }
-          }, undefined, undefined, undefined, undefined, {
+          }, undefined, undefined, undefined, undefined, undefined, {
             headers: {
               'Content-Type': 'application/merge-patch+json'
             }
