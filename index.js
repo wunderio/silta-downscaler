@@ -43,6 +43,8 @@ app.post('/upscale', async (req, res) => {
           k8sResourceManager.updateIngressLastUpdate(name, namespace)
         ]);
 
+        // TODO: update ingress and switch service only after all resources are ready?
+
         // Send the response immediately, before the deployments are ready.
         res.json({message: `${ingress.metadata.name} triggered`});
 
@@ -52,6 +54,9 @@ app.post('/upscale', async (req, res) => {
 
         // Once the deployments are ready, reset the service.
         await k8sResourceManager.resetService(serviceName, namespace);
+
+        // Remove upscaler proxy pod if no services in namespace are pointing to it
+        k8sResourceManager.removeUpscalerProxy(namespace);
       }
       else {
         console.log(`Someone tried to upscale ${req.query.domain} via ingress/${name}`)

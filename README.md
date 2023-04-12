@@ -23,6 +23,7 @@ Downscaler cronjob test:
 ```bash
 PLACEHOLDER_SERVICE_NAME=silta-cluster-placeholder-upscaler \
 PLACEHOLDER_SERVICE_NAMESPACE=silta-cluster \
+PLACEHOLDER_PROXY_IMAGE=wunderio/silta-downscaler:v0.2-proxy \
 DEFAULT_MIN_AGE=1h \
 RELEASE_MIN_AGE='{"^(dev|develop|development)":"2w","^(master|main|stage|staging)":"4w","^dependabot":"1h","^production":"10y"}' \
 node downscale.js
@@ -71,8 +72,8 @@ Someone tried to upscale cli-test.drupal-project-k8s.[cluster-domain] via ingres
 
 Docker image build
 ```
-docker build --tag 'wunderio/silta-downscaler:latest' --tag 'wunderio/silta-downscaler:v0.1' --tag 'wunderio/silta-downscaler:v0.1.X' .
+docker build --tag 'wunderio/silta-downscaler:latest' --tag 'wunderio/silta-downscaler:v0.2' --tag 'wunderio/silta-downscaler:v0.2.X' .
 docker push wunderio/silta-downscaler:latest 
-docker push wunderio/silta-downscaler:v0.1 
-docker push wunderio/silta-downscaler:v0.1.X
+docker push wunderio/silta-downscaler:v0.2 
+docker push wunderio/silta-downscaler:v0.2.X
 ```

@@ -10,8 +10,26 @@ const k8sResourceManager = require('./src/k8sResourceManager');
 
 const defaultMinAge = process.env.DEFAULT_MIN_AGE;
 const releaseMinAge = JSON.parse(process.env.RELEASE_MIN_AGE);
+const placeholderServiceName = process.env.PLACEHOLDER_SERVICE_NAME;
+const placeholderServiceNamespace = process.env.PLACEHOLDER_SERVICE_NAMESPACE;
+const placeholderProxyImage = process.env.PLACEHOLDER_PROXY_IMAGE;
 
 (async function main() {
+  
+  // Required env vars
+  if (!defaultMinAge) {
+    throw new Error("Missing DEFAULT_MIN_AGE");
+  }
+  if (!placeholderServiceName) {
+    throw new Error("Missing PLACEHOLDER_SERVICE_NAME");
+  }
+  if (!placeholderServiceNamespace) {
+    throw new Error("Missing PLACEHOLDER_SERVICE_NAMESPACE");
+  }
+  if (!placeholderProxyImage) {
+    throw new Error("Missing PLACEHOLDER_PROXY_IMAGE");
+  }
+  
   try {
 
     const ingresses = (await k8sNetworkApi.listIngressForAllNamespaces()).body.items;
