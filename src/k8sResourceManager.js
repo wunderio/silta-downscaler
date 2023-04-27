@@ -89,6 +89,7 @@ class K8sResourceManager {
                     }
                   },
                   spec: {
+                    enableServiceLinks: false,
                     containers: [
                       {
                         name: 'nginx',
