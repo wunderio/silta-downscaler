@@ -63,6 +63,10 @@ class K8sResourceManager {
   async redirectService(serviceName, namespace) {
     try {
       const service = (await k8sApi.readNamespacedService(serviceName, namespace)).body;
+      // Do not save NodePort values, as they are automatically set by k8s and we do not depend on them
+      service.spec.ports.forEach((port) => {
+        delete port["nodePort"]
+      });
 
       if (!service.metadata.annotations || service.metadata.annotations['auto-downscale/down'] != 'true') {
 
