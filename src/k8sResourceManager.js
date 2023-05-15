@@ -250,6 +250,10 @@ class K8sResourceManager {
       newService.spec.externalName = null;
       newService.spec.selector = originalSelector;
       newService.spec.ports = originalPorts;
+      // Do not restore nodeport values
+      newService.spec.ports.forEach((port) => {
+        delete port["nodePort"]
+      });
         
       await k8sApi.createNamespacedService(namespace, newService);
     }
