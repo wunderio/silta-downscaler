@@ -225,65 +225,34 @@ class K8sResourceManager {
       originalPorts = JSON.parse(service.metadata.annotations['auto-downscale/original-ports']);
     }
 
-    // Old downscales used to set type to ExternalName. 
-    // We will tackle that case separately since some load balancers (nginx) do not support ExternalName updates.
-    // We'll just recreate the service instead of patching, so ingress update gets triggered.
-    if (service.spec.type == 'ExternalName') {
-      await k8sApi.deleteNamespacedService(serviceName, namespace);
-      // Recreate service with original definition and change type
-      let newService = {
-        metadata: {
-          name: serviceName,
-          namespace: namespace,
-          annotations: service.metadata.annotations,
-          labels: service.metadata.labels,
-        },
-        spec: service.spec
-      };
-      newService.metadata.annotations['auto-downscale/down'] = null;
-      newService.metadata.annotations['auto-downscale/original-type'] = null;
-      newService.metadata.annotations['auto-downscale/original-selector'] = null;
-      newService.metadata.annotations['auto-downscale/original-ports'] = null;
-      newService.metadata.labels['auto-downscale/redirected'] = null;
+    await k8sApi.deleteNamespacedService(serviceName, namespace);
+    
+    // Recreate service with original definition and change type
+    let newService = {
+      metadata: {
+        name: serviceName,
+        namespace: namespace,
+        annotations: service.metadata.annotations,
+        labels: service.metadata.labels,
+      },
+      spec: service.spec
+    };
+    newService.metadata.annotations['auto-downscale/down'] = null;
+    newService.metadata.annotations['auto-downscale/original-type'] = null;
+    newService.metadata.annotations['auto-downscale/original-selector'] = null;
+    newService.metadata.annotations['auto-downscale/original-ports'] = null;
+    newService.metadata.labels['auto-downscale/redirected'] = null;
 
-      newService.spec.type = service.metadata.annotations['auto-downscale/original-type'];
-      newService.spec.externalName = null;
-      newService.spec.selector = originalSelector;
-      newService.spec.ports = originalPorts;
-      // Do not restore nodeport values
-      newService.spec.ports.forEach((port) => {
-        delete port["nodePort"]
-      });
-        
-      await k8sApi.createNamespacedService(namespace, newService);
-    }
-
-    // New downscales retain type and only switch selector
-    else {
-      await k8sApi.patchNamespacedService(serviceName, namespace, {
-        metadata: {
-          annotations: {
-            'auto-downscale/down': null,
-            'auto-downscale/original-type': null,
-            'auto-downscale/original-selector': null,
-            'auto-downscale/original-ports': null
-          },
-          labels: {
-            'auto-downscale/redirected': null,
-          }
-        },
-        spec: {
-          type: service.metadata.annotations['auto-downscale/original-type'],
-          externalName: null,
-          selector: originalSelector,
-          ports: originalPorts,
-        }
-      }, undefined, undefined, undefined, undefined, undefined, {
-        headers: {
-          'Content-Type': 'application/merge-patch+json'
-        }
-      });
-    }
+    newService.spec.type = service.metadata.annotations['auto-downscale/original-type'];
+    newService.spec.externalName = null;
+    newService.spec.selector = originalSelector;
+    newService.spec.ports = originalPorts;
+    // Do not restore nodeport values
+    newService.spec.ports.forEach((port) => {
+      delete port["nodePort"]
+    });
+      
+    await k8sApi.createNamespacedService(namespace, newService);
 
     console.log(`Reset service ${namespace}/${serviceName} to original service`);
   }
