@@ -70,8 +70,15 @@ Reset service drupal-project-k8s/cli-test-drupal to original service
 Someone tried to upscale cli-test.drupal-project-k8s.[cluster-domain] via ingress/cli-test-drupal
 ```
 
-Docker image build
-```
+### Docker image build
+
+**Automated builds:**
+
+Tag a new release in github, docker hub integration will build and publish the images automatically.
+
+**Manual builds (only when automated builds are not working):**
+
+```bash
 docker build --tag 'wunderio/silta-downscaler:latest' --tag 'wunderio/silta-downscaler:v0.2' --tag 'wunderio/silta-downscaler:v0.2.X' .
 docker push wunderio/silta-downscaler:latest 
 docker push wunderio/silta-downscaler:v0.2 
