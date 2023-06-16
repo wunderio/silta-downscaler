@@ -225,8 +225,12 @@ class K8sResourceManager {
       originalPorts = JSON.parse(service.metadata.annotations['auto-downscale/original-ports']);
     }
 
-    await k8sApi.deleteNamespacedService(serviceName, namespace);
-    
+    let originalType = service.spec.type;
+    // Fallback to original type when annotation is missing
+    if (service.metadata.annotations['auto-downscale/original-type']) {
+      originalType = service.metadata.annotations['auto-downscale/original-type'];
+    }
+
     // Recreate service with original definition and change type
     let newService = {
       metadata: {
@@ -243,7 +247,7 @@ class K8sResourceManager {
     newService.metadata.annotations['auto-downscale/original-ports'] = null;
     newService.metadata.labels['auto-downscale/redirected'] = null;
 
-    newService.spec.type = service.metadata.annotations['auto-downscale/original-type'];
+    newService.spec.type = originalType
     newService.spec.externalName = null;
     newService.spec.selector = originalSelector;
     newService.spec.ports = originalPorts;
@@ -252,6 +256,7 @@ class K8sResourceManager {
       delete port["nodePort"]
     });
       
+    await k8sApi.deleteNamespacedService(serviceName, namespace);
     await k8sApi.createNamespacedService(namespace, newService);
 
     console.log(`Reset service ${namespace}/${serviceName} to original service`);
