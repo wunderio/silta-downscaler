@@ -41,9 +41,14 @@ const placeholderProxyImage = process.env.PLACEHOLDER_PROXY_IMAGE;
         const lastUpdate = moment(ingress.metadata.annotations['auto-downscale/last-update']);
         const name = ingress.metadata.name;
         let minAge = defaultMinAge;
-        for (let regex in releaseMinAge) {
-          if (name.match(new RegExp(regex))) {
-            minAge = releaseMinAge[regex];
+        // check if custom min-age annotation is present.
+        if ('auto-downscale/min-age' in ingress.metadata.annotations) {
+          minAge = ingress.metadata.annotations['auto-downscale/min-age'];
+        } else {
+          for (let regex in releaseMinAge) {
+            if (name.match(new RegExp(regex))) {
+              minAge = releaseMinAge[regex];
+            }
           }
         }
         return lastUpdate.add(...minAge.split(/(\d+)/).filter(match => match)).isBefore(moment());
