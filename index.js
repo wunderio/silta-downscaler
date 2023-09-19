@@ -12,6 +12,7 @@ const k8sApi = kc.makeApiClient(k8s.CoreV1Api);
 const k8sNetworkApi = kc.makeApiClient(k8s.NetworkingV1Api);
 
 const placeholderDomain = process.env.PLACEHOLDER_DOMAIN;
+const badUserAgents = process.env.BAD_USERAGENTS;
 
 const k8sResourceManager = require('./src/k8sResourceManager');
 
@@ -120,6 +121,9 @@ app.get('/status', async (req, res) => {
 
 app.get('*', async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
+
+  if (badUserAgents.includes(req.get('User-Agent')))
+    res.sendStatus(403);
 
   try {
     // Strip off the port when used locally.
