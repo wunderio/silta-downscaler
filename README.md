@@ -23,7 +23,7 @@ Downscaler cronjob test:
 ```bash
 PLACEHOLDER_SERVICE_NAME=silta-cluster-placeholder-upscaler \
 PLACEHOLDER_SERVICE_NAMESPACE=silta-cluster \
-PLACEHOLDER_PROXY_IMAGE=wunderio/silta-downscaler:v0.2-proxy \
+PLACEHOLDER_PROXY_IMAGE=wunderio/silta-downscaler:v1-proxy \
 DEFAULT_MIN_AGE=1h \
 RELEASE_MIN_AGE='{"^(dev|develop|development)":"2w","^(master|main|stage|staging)":"4w","^dependabot":"1h","^production":"10y"}' \
 node downscale.js
@@ -79,8 +79,11 @@ Tag a new release in github, docker hub integration will build and publish the i
 **Manual builds (only when automated builds are not working):**
 
 ```bash
-docker build --tag 'wunderio/silta-downscaler:latest' --tag 'wunderio/silta-downscaler:v0.2' --tag 'wunderio/silta-downscaler:v0.2.X' .
-docker push wunderio/silta-downscaler:latest 
-docker push wunderio/silta-downscaler:v0.2 
-docker push wunderio/silta-downscaler:v0.2.X
+docker build --tag 'wunderio/silta-downscaler:v1' --tag 'wunderio/silta-downscaler:v1.X' --tag 'wunderio/silta-downscaler:v1.X.Y' .
+docker push wunderio/silta-downscaler:v1 
+docker push wunderio/silta-downscaler:v1.X
+docker push wunderio/silta-downscaler:v1.X.Y
+
+docker build --tag 'wunderio/silta-downscaler:v1-proxy' proxy/
+docker push wunderio/silta-downscaler:v1-proxy
 ```
