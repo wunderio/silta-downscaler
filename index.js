@@ -12,9 +12,15 @@ const k8sApi = kc.makeApiClient(k8s.CoreV1Api);
 const k8sNetworkApi = kc.makeApiClient(k8s.NetworkingV1Api);
 
 const placeholderDomain = process.env.PLACEHOLDER_DOMAIN;
-const badUserAgents = process.env.BAD_USERAGENTS;
 
 const k8sResourceManager = require('./src/k8sResourceManager');
+
+const badUserAgents = process.env.BAD_USERAGENTS;
+var badUserAgentsArray;
+
+if (typeof badUserAgents !== 'undefined'){
+  badUserAgentsArray = badUserAgents.split(";");
+}
 
 app.use(cors());
 
@@ -23,6 +29,7 @@ app.use(cors());
  */
 app.post('/upscale', async (req, res) => {
   try {
+    blockBadActors(req, res);
     const ingress = await loadIngressByHostname(req.query.domain);
 
     if (ingress) {
@@ -122,10 +129,7 @@ app.get('/status', async (req, res) => {
 app.get('*', async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
 
-  if (typeof badUserAgents !== 'undefined'){
-    if (badUserAgents.includes(req.get('User-Agent')))
-      res.sendStatus(403);
-  }
+  blockBadActors(req, res);
 
   try {
     // Strip off the port when used locally.
@@ -156,6 +160,14 @@ app.listen(port, () => console.log(`Example app listening on port ${port}!`));
 async function loadIngressByHostname(hostname) {
   const ingresses = (await k8sNetworkApi.listIngressForAllNamespaces()).body.items;
   return ingresses.find(ingress => ingress.spec.rules.some(rule => rule.host === hostname));
+}
+
+function blockBadActors(req, res) {
+  if (typeof badUserAgents !== 'undefined'){
+    badUserAgentsArray.forEach(function(uaString){
+      if (req.get('User-Agent').includes(uaString)) res.sendStatus(403).end();
+    });
+  }
 }
 
 function placeholderPageContent(hostname, ingressName) {
