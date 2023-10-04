@@ -122,8 +122,10 @@ app.get('/status', async (req, res) => {
 app.get('*', async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
 
-  if (badUserAgents.includes(req.get('User-Agent')))
-    res.sendStatus(403);
+  if (typeof badUserAgents !== 'undefined'){
+    if (badUserAgents.includes(req.get('User-Agent')))
+      res.sendStatus(403);
+  }
 
   try {
     // Strip off the port when used locally.
