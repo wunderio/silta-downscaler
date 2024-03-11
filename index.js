@@ -29,7 +29,10 @@ app.use(cors());
  */
 app.post('/upscale', async (req, res) => {
   try {
-    blockBadActors(req, res);
+    if (blockBadActors(req)) {
+      res.sendStatus(403).end();
+      return;
+    }
     const ingress = await loadIngressByHostname(req.query.domain);
 
     if (ingress) {
@@ -128,9 +131,10 @@ app.get('/status', async (req, res) => {
 
 app.get('*', async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
-
-  blockBadActors(req, res);
-
+  if (blockBadActors(req)) {
+    res.sendStatus(403).end();
+    return;
+  }
   try {
     // Strip off the port when used locally.
     const hostname = req.headers.host.replace(':3000', '');
@@ -162,12 +166,17 @@ async function loadIngressByHostname(hostname) {
   return ingresses.find(ingress => ingress.spec.rules.some(rule => rule.host === hostname));
 }
 
-function blockBadActors(req, res) {
+function blockBadActors(req) {
   if (typeof badUserAgents !== 'undefined'){
     badUserAgentsArray.forEach(function(uaString){
-      if (req.get('User-Agent').includes(uaString)) res.sendStatus(403).end();
+      if (req.get('User-Agent') && req.get('User-Agent').includes(uaString)) {
+        // Print ip address of the request and sanitized user agent
+        console.log(`Blocked request from ${req.ip} with user agent ${req.get('User-Agent').replace(/[^a-zA-Z0-9]/g, '')}`);
+        return true;
+      }
     });
   }
+  return false;
 }
 
 function placeholderPageContent(hostname, ingressName) {
