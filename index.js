@@ -143,7 +143,10 @@ app.get('*', async (req, res) => {
       const annotations = currentIngress.metadata.annotations;
       if (annotations['auto-downscale/down']) {
         console.log(`Showing placeholder for ${hostname}`)
-        res.send(placeholderPageContent(hostname, currentIngress.metadata.name));
+        // always send header "x-robots-tag"
+        res.append("x-robots-tag", "noindex, nofollow, nosnippet, noarchive")
+        // set response status to 404, but do show :Launch" button
+        res.status(404).send(placeholderPageContent(hostname, currentIngress.metadata.name));
       }
       else {
         res.sendStatus(404);
