@@ -13,13 +13,14 @@ const placeholderProxyImage = process.env.PLACEHOLDER_PROXY_IMAGE;
 
 const moment = require('moment');
 const crypto = require('crypto')
+const { AppsV1ApiListNamespacedDeploymentRequest } = require('@kubernetes/client-node/dist/gen/types/ObjectParamAPI');
 
 class K8sResourceManager {
   async loadResources(namespace, labelSelector) {
     try {
-      const deployments = (await k8sAppApi.listNamespacedDeployment(namespace, null, null, null, null, labelSelector)).body.items;
-      const cronjobs = (await k8sBatchApi.listNamespacedCronJob(namespace, null, null, null, null, labelSelector)).body.items;
-      const statefulsets = (await k8sAppApi.listNamespacedStatefulSet(namespace, null, null, null, null, labelSelector)).body.items;
+      const deployments = (await k8sAppApi.listNamespacedDeployment({namespace: namespace, labelSelector: labelSelector})).items;
+      const cronjobs = (await k8sBatchApi.listNamespacedCronJob({namespace: namespace, labelSelector: labelSelector})).items;
+      const statefulsets = (await k8sAppApi.listNamespacedStatefulSet({namespace: namespace, labelSelector: labelSelector})).items;
 
       return {
         deployments,
@@ -493,7 +494,7 @@ class K8sResourceManager {
       const services = await k8sApi.listNamespacedService(namespace, undefined, undefined, undefined, undefined, 'auto-downscale/redirected=true');
 
       // If no services point to it, delete silta-cluster-placeholder-upscaler-proxy deployment
-      if (services.body.items.length === 0) {
+      if (services.items.length === 0) {
  
         // Delete silta-cluster-placeholder-upscaler-proxy deployment only if it exists
         try {

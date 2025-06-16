@@ -165,7 +165,7 @@ app.get('*', async (req, res) => {
 app.listen(port, () => console.log(`Example app listening on port ${port}!`));
 
 async function loadIngressByHostname(hostname) {
-  const ingresses = (await k8sNetworkApi.listIngressForAllNamespaces()).body.items;
+  const ingresses = (await k8sNetworkApi.listIngressForAllNamespaces()).items;
   return ingresses.find(ingress => ingress.spec.rules.some(rule => rule.host === hostname));
 }
 
