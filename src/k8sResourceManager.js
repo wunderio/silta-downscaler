@@ -13,7 +13,6 @@ const placeholderProxyImage = process.env.PLACEHOLDER_PROXY_IMAGE;
 
 const moment = require('moment');
 const crypto = require('crypto')
-const { AppsV1ApiListNamespacedDeploymentRequest } = require('@kubernetes/client-node/dist/gen/types/ObjectParamAPI');
 
 class K8sResourceManager {
   async loadResources(namespace, labelSelector) {
