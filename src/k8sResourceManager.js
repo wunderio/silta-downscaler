@@ -62,7 +62,7 @@ class K8sResourceManager {
 
   async redirectService(serviceName, namespace) {
     try {
-      const service = (await k8sApi.readNamespacedService(serviceName, namespace)).body;
+      const service = (await k8sApi.readNamespacedService({ name: serviceName, namespace: namespace }));
       // Do not save NodePort values, as they are automatically set by k8s and we do not depend on them
       service.spec.ports.forEach((port) => {
         delete port["nodePort"]
@@ -71,60 +71,63 @@ class K8sResourceManager {
       if (!service.metadata.annotations || service.metadata.annotations['auto-downscale/down'] != 'true') {
 
         // Check if nginx deployment exists
-        await k8sAppApi.readNamespacedDeployment('silta-cluster-placeholder-upscaler-proxy', namespace).catch(
+        await k8sAppApi.readNamespacedDeployment({ name: 'silta-cluster-placeholder-upscaler-proxy', namespace: namespace }).catch(
           (error) => {
             console.log("Spinning up upscaler proxy deployment in %s namespace", namespace)
             // Spin up upscaler proxy to handle traffic
-            k8sAppApi.createNamespacedDeployment(namespace, {
-              metadata: {
-                name: `silta-cluster-placeholder-upscaler-proxy`,
-              },
-              spec: {
-                replicas: 1,
-                selector: {
-                  matchLabels: {
-                    app: 'silta-cluster-placeholder-upscaler-proxy'
-                  }
+            k8sAppApi.createNamespacedDeployment({ 
+              namespace: namespace, 
+              body: {
+                metadata: {
+                  name: `silta-cluster-placeholder-upscaler-proxy`,
                 },
-                template: {
-                  metadata: {
-                    labels: {
+                spec: {
+                  replicas: 1,
+                  selector: {
+                    matchLabels: {
                       app: 'silta-cluster-placeholder-upscaler-proxy'
                     }
                   },
-                  spec: {
-                    enableServiceLinks: false,
-                    containers: [
-                      {
-                        name: 'nginx',
-                        image: `${placeholderProxyImage}`,
-                        env: [
-                          {
-                            name: 'PLACEHOLDER_SERVICE_NAME',
-                            value: `${placeholderServiceName}`
-                          },
-                          {
-                            name: 'PLACEHOLDER_SERVICE_NAMESPACE',
-                            value: `${placeholderServiceNamespace}`
-                          },
-                        ],
-                        ports: [
-                          {
-                            containerPort: 8080,
-                          }
-                        ],
-                        resources: {
-                          // requests: {
-                          //   cpu: '1m',
-                          //   memory: '10Mi',
-                          // },
-                          limits: {
-                            cpu: '1m',
-                            memory: '10Mi',
-                          },
-                        }
+                  template: {
+                    metadata: {
+                      labels: {
+                        app: 'silta-cluster-placeholder-upscaler-proxy'
                       }
-                    ]
+                    },
+                    spec: {
+                      enableServiceLinks: false,
+                      containers: [
+                        {
+                          name: 'nginx',
+                          image: `${placeholderProxyImage}`,
+                          env: [
+                            {
+                              name: 'PLACEHOLDER_SERVICE_NAME',
+                              value: `${placeholderServiceName}`
+                            },
+                            {
+                              name: 'PLACEHOLDER_SERVICE_NAMESPACE',
+                              value: `${placeholderServiceNamespace}`
+                            },
+                          ],
+                          ports: [
+                            {
+                              containerPort: 8080,
+                            }
+                          ],
+                          resources: {
+                            // requests: {
+                            //   cpu: '1m',
+                            //   memory: '10Mi',
+                            // },
+                            limits: {
+                              cpu: '1m',
+                              memory: '10Mi',
+                            },
+                          }
+                        }
+                      ]
+                    }
                   }
                 }
               }
@@ -134,7 +137,7 @@ class K8sResourceManager {
             return new Promise(async (resolve, reject) => {
               try {
                 const intervalHandle = setInterval(async () => {
-                  const deployment = (await k8sAppApi.readNamespacedDeployment('silta-cluster-placeholder-upscaler-proxy', namespace)).body;
+                  const deployment = (await k8sAppApi.readNamespacedDeployment({ name: 'silta-cluster-placeholder-upscaler-proxy', namespace: namespace }));
                   if (deployment.status.readyReplicas > 0) {
                     console.log("Upscaler proxy deployment is ready")
                     clearInterval(intervalHandle);
@@ -150,33 +153,33 @@ class K8sResourceManager {
         );
        
         // point service to upscaler proxy pod
-        await k8sApi.patchNamespacedService(serviceName, namespace, {
-          metadata: {
-            annotations: {
-              'auto-downscale/down': 'true',
-              'auto-downscale/original-type': service.spec.type,
-              'auto-downscale/original-selector': JSON.stringify(service.spec.selector),
-              'auto-downscale/original-ports': JSON.stringify(service.spec.ports)
-            },
-            labels: {
-              'auto-downscale/redirected': 'true',
-            }
-          },
-          spec: {
-            ports: [
-              {
-                name: 'http',
-                port: 80,
-                targetPort: 8080,
-                protocol: 'TCP'
+        await k8sApi.patchNamespacedService({
+          name: serviceName,
+          namespace: namespace,
+          body: {
+            metadata: {
+              annotations: {
+                'auto-downscale/down': 'true',
+                'auto-downscale/original-type': service.spec.type,
+                'auto-downscale/original-selector': JSON.stringify(service.spec.selector),
+                'auto-downscale/original-ports': JSON.stringify(service.spec.ports)
+              },
+              labels: {
+                'auto-downscale/redirected': 'true',
               }
-            ],
-          },
-        }, undefined, undefined, undefined, undefined, undefined, {
-          headers: {
-            'Content-Type': 'application/merge-patch+json'
+            },
+            spec: {
+              ports: [
+                {
+                  name: 'http',
+                  port: 80,
+                  targetPort: 8080,
+                  protocol: 'TCP'
+                }
+              ],
+            },
           }
-        });
+        }, k8s.setHeaderOptions('Content-Type', k8s.PatchStrategy.MergePatch));
 
         // replace service selector instead of patching it
         const patch = [
@@ -188,9 +191,12 @@ class K8sResourceManager {
             }
           }
         ];
-        const options = { "headers": { "Content-type": k8s.PatchUtils.PATCH_FORMAT_JSON_PATCH}};
-        await k8sApi.patchNamespacedService(serviceName, namespace, patch, undefined, undefined, undefined, undefined, undefined, options);
-      
+        await k8sApi.patchNamespacedService({
+          name: serviceName,
+          namespace: namespace,
+          body: patch
+        }, k8s.setHeaderOptions('Content-Type', k8s.PatchStrategy.JsonPatch));
+
         console.log(`Redirected service ${namespace}/${serviceName} to placeholder service`);
       }
     }
@@ -202,7 +208,7 @@ class K8sResourceManager {
   async resetService(serviceName, namespace) {
     console.log(`resetService: Resetting service to original ${namespace}/${serviceName}`);
 
-    const service = (await k8sApi.readNamespacedService(serviceName, namespace)).body;
+    const service = (await k8sApi.readNamespacedService({ name: serviceName, namespace: namespace }));
 
     // if service is not redirected, do nothing
     if (!service.metadata.annotations || service.metadata.annotations['auto-downscale/down'] != 'true') {
@@ -256,41 +262,41 @@ class K8sResourceManager {
       delete port["nodePort"]
     });
       
-    await k8sApi.deleteNamespacedService(serviceName, namespace);
-    await k8sApi.createNamespacedService(namespace, newService);
+    await k8sApi.deleteNamespacedService({ name: serviceName, namespace: namespace });
+    await k8sApi.createNamespacedService({ namespace: namespace, body: newService });
 
     console.log(`Reset service ${namespace}/${serviceName} to original service`);
   }
 
   async updateIngressLastUpdate(ingressName, namespace) {
-    await k8sNetworkApi.patchNamespacedIngress(ingressName, namespace, {
-      metadata: {
-        annotations: {
-          'auto-downscale/last-update': moment().toISOString(),
-          'auto-downscale/down': null,
+    await k8sNetworkApi.patchNamespacedIngress({
+      name: ingressName,
+      namespace,
+      body: {
+        metadata: {
+          annotations: {
+            'auto-downscale/last-update': moment().toISOString(),
+            'auto-downscale/down': null,
+          }
         }
-      },
-    }, undefined, undefined, undefined, undefined, undefined, {
-      headers: {
-        'Content-Type': 'application/merge-patch+json'
       }
-    });
+    }, k8s.setHeaderOptions('Content-Type', k8s.PatchStrategy.MergePatch));
 
     console.log(`Updated last-update annotation on ${namespace}/${ingressName} ingress`);
   }
 
   async markIngressAsDown(ingressName, namespace) {
-    await k8sNetworkApi.patchNamespacedIngress(ingressName, namespace, {
-      metadata: {
-        annotations: {
-          'auto-downscale/down': 'true',
+    await k8sNetworkApi.patchNamespacedIngress({
+      name: ingressName,
+      namespace,
+      body: {
+        metadata: {
+          annotations: {
+            'auto-downscale/down': 'true',
+          }
         }
-      },
-    }, undefined, undefined, undefined, undefined, undefined, {
-      headers: {
-        'Content-Type': 'application/merge-patch+json'
       }
-    });
+    }, k8s.setHeaderOptions('Content-Type', k8s.PatchStrategy.MergePatch));
 
     console.log(`Marked ingress ${namespace}/${ingressName} as down`);
   }
@@ -334,20 +340,20 @@ class K8sResourceManager {
           }
 
           // Downscale the deployment or statefulset.
-          await k8sAppApi[method](name, namespace, {
-            metadata: {
-              annotations: {
-                'auto-downscale/original-replicas': `${replicas}`
+          await k8sAppApi[method]({
+            name: name,
+            namespace: namespace,
+            body: {
+              metadata: {
+                annotations: {
+                  'auto-downscale/original-replicas': `${replicas}`
+                }
+              },
+              spec: {
+                replicas: 0
               }
-            },
-            spec: {
-              replicas: 0
             }
-          }, undefined, undefined, undefined, undefined, undefined, {
-            headers: {
-              'Content-Type': 'application/merge-patch+json'
-            }
-          });
+          }, k8s.setHeaderOptions('Content-Type', k8s.PatchStrategy.MergePatch));
 
           console.log(`Downscaled ${kind} ${namespace}/${name} from ${replicas} to 0`);
         }
@@ -355,15 +361,16 @@ class K8sResourceManager {
       else if (kind === 'cronjob') {
         const suspended = resource.spec.suspend;
         if (!suspended) {
-          await k8sBatchApi.patchNamespacedCronJob(name, namespace, {
-            spec: {
-              suspend: true
+          await k8sBatchApi.patchNamespacedCronJob({
+            name: name,
+            namespace: namespace,
+            body: {
+              spec: {
+                suspend: true
+              }
             }
-          }, undefined, undefined, undefined, undefined, undefined, {
-            headers: {
-              'Content-Type': 'application/merge-patch+json'
-            }
-          });
+          }, k8s.setHeaderOptions('Content-Type', k8s.PatchStrategy.MergePatch));
+
           console.log(`Suspended cronjob ${namespace}/${name}`);
         }
       }
@@ -394,20 +401,17 @@ class K8sResourceManager {
           }
 
           // Upscale the deployment or statefulset.
-          await k8sAppApi[method](name, namespace, {
-            metadata: {
-              annotations: {
-                'auto-downscale/original-replicas': null
-              }
-            },
-            spec: {
-              replicas: originalReplicas
+          await k8sAppApi[method]({
+            name: name,
+            namespace: namespace,
+            body: {
+              metadata: {
+                annotations: {
+                  'auto-downscale/original-replicas': null
+                }
+              },
             }
-          }, undefined, undefined, undefined, undefined, undefined, {
-            headers: {
-              'Content-Type': 'application/merge-patch+json'
-            }
-          });
+          }, k8s.setHeaderOptions('Content-Type', k8s.PatchStrategy.MergePatch));
 
           console.log(`Upscaled ${kind} ${namespace}/${name} from 0 to ${originalReplicas}`);
         }
@@ -415,15 +419,16 @@ class K8sResourceManager {
       else if (kind === 'cronjob') {
         const suspended = resource.spec.suspend;
         if (suspended) {
-          await k8sBatchApi.patchNamespacedCronJob(name, namespace, {
-            spec: {
-              suspend: false
+          await k8sBatchApi.patchNamespacedCronJob({
+            name: name,
+            namespace: namespace,
+            body: {
+              spec: {
+                suspend: false
+              }
             }
-          }, undefined, undefined, undefined, undefined, undefined, {
-            headers: {
-              'Content-Type': 'application/merge-patch+json'
-            }
-          });
+          }, k8s.setHeaderOptions('Content-Type', k8s.PatchStrategy.MergePatch));
+
           console.log(`Unsuspended cronjob ${namespace}/${name}`);
         }
       }
@@ -490,14 +495,14 @@ class K8sResourceManager {
     try {
       
       // Query services in namespace with selector 'auto-downscale/redirected=true'
-      const services = await k8sApi.listNamespacedService(namespace, undefined, undefined, undefined, undefined, 'auto-downscale/redirected=true');
+      const services = await k8sApi.listNamespacedService({ namespace: namespace, labelSelector: 'auto-downscale/redirected=true' });
 
       // If no services point to it, delete silta-cluster-placeholder-upscaler-proxy deployment
       if (services.items.length === 0) {
  
         // Delete silta-cluster-placeholder-upscaler-proxy deployment only if it exists
         try {
-          await k8sAppApi.deleteNamespacedDeployment('silta-cluster-placeholder-upscaler-proxy', namespace);
+          await k8sAppApi.deleteNamespacedDeployment({ name: 'silta-cluster-placeholder-upscaler-proxy', namespace: namespace });
           console.log(`Removed upscaler proxy in ${namespace}`);
         } catch (error) {
           // Skip error if deployment does not exist

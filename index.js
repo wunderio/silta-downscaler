@@ -99,7 +99,7 @@ app.get('/status', async (req, res) => {
       var resourceStatus = await k8sResourceManager.loadResourcesStatus(namespace, labelSelector1);
       var labelSelector2 = labelSelector1.replace("release=","app.kubernetes.io/instance=");
       const resourceStatus2 = await k8sResourceManager.loadResourcesStatus(namespace, labelSelector2);
-      const service = (await k8sApi.readNamespacedService(serviceName, namespace)).body;
+      const service = (await k8sApi.readNamespacedService({ name: serviceName, namespace: namespace }));
 
       // Merge resourceStatus2 into resourceStatus based on name key
       resourceStatus2.forEach(function (item2) {
