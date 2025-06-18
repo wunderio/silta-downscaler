@@ -17,9 +17,9 @@ const crypto = require('crypto')
 class K8sResourceManager {
   async loadResources(namespace, labelSelector) {
     try {
-      const deployments = (await k8sAppApi.listNamespacedDeployment({namespace: namespace, labelSelector: labelSelector})).items;
-      const cronjobs = (await k8sBatchApi.listNamespacedCronJob({namespace: namespace, labelSelector: labelSelector})).items;
-      const statefulsets = (await k8sAppApi.listNamespacedStatefulSet({namespace: namespace, labelSelector: labelSelector})).items;
+      const deployments = (await k8sAppApi.listNamespacedDeployment({ namespace, labelSelector })).items;
+      const cronjobs = (await k8sBatchApi.listNamespacedCronJob({ namespace, labelSelector })).items;
+      const statefulsets = (await k8sAppApi.listNamespacedStatefulSet({ namespace, labelSelector })).items;
 
       return {
         deployments,
@@ -62,7 +62,7 @@ class K8sResourceManager {
 
   async redirectService(serviceName, namespace) {
     try {
-      const service = (await k8sApi.readNamespacedService({ name: serviceName, namespace: namespace }));
+      const service = (await k8sApi.readNamespacedService({ name: serviceName, namespace }));
       // Do not save NodePort values, as they are automatically set by k8s and we do not depend on them
       service.spec.ports.forEach((port) => {
         delete port["nodePort"]
@@ -71,7 +71,7 @@ class K8sResourceManager {
       if (!service.metadata.annotations || service.metadata.annotations['auto-downscale/down'] != 'true') {
 
         // Check if nginx deployment exists
-        await k8sAppApi.readNamespacedDeployment({ name: 'silta-cluster-placeholder-upscaler-proxy', namespace: namespace }).catch(
+        await k8sAppApi.readNamespacedDeployment({ name: 'silta-cluster-placeholder-upscaler-proxy', namespace }).catch(
           (error) => {
             console.log("Spinning up upscaler proxy deployment in %s namespace", namespace)
             // Spin up upscaler proxy to handle traffic
@@ -137,7 +137,7 @@ class K8sResourceManager {
             return new Promise(async (resolve, reject) => {
               try {
                 const intervalHandle = setInterval(async () => {
-                  const deployment = (await k8sAppApi.readNamespacedDeployment({ name: 'silta-cluster-placeholder-upscaler-proxy', namespace: namespace }));
+                  const deployment = (await k8sAppApi.readNamespacedDeployment({ name: 'silta-cluster-placeholder-upscaler-proxy', namespace }));
                   if (deployment.status.readyReplicas > 0) {
                     console.log("Upscaler proxy deployment is ready")
                     clearInterval(intervalHandle);
@@ -155,7 +155,7 @@ class K8sResourceManager {
         // point service to upscaler proxy pod
         await k8sApi.patchNamespacedService({
           name: serviceName,
-          namespace: namespace,
+          namespace,
           body: {
             metadata: {
               annotations: {
@@ -193,7 +193,7 @@ class K8sResourceManager {
         ];
         await k8sApi.patchNamespacedService({
           name: serviceName,
-          namespace: namespace,
+          namespace,
           body: patch
         }, k8s.setHeaderOptions('Content-Type', k8s.PatchStrategy.JsonPatch));
 
@@ -208,7 +208,7 @@ class K8sResourceManager {
   async resetService(serviceName, namespace) {
     console.log(`resetService: Resetting service to original ${namespace}/${serviceName}`);
 
-    const service = (await k8sApi.readNamespacedService({ name: serviceName, namespace: namespace }));
+    const service = (await k8sApi.readNamespacedService({ name: serviceName, namespace }));
 
     // if service is not redirected, do nothing
     if (!service.metadata.annotations || service.metadata.annotations['auto-downscale/down'] != 'true') {
@@ -262,8 +262,8 @@ class K8sResourceManager {
       delete port["nodePort"]
     });
       
-    await k8sApi.deleteNamespacedService({ name: serviceName, namespace: namespace });
-    await k8sApi.createNamespacedService({ namespace: namespace, body: newService });
+    await k8sApi.deleteNamespacedService({ name: serviceName, namespace });
+    await k8sApi.createNamespacedService({ namespace, body: newService });
 
     console.log(`Reset service ${namespace}/${serviceName} to original service`);
   }
@@ -341,8 +341,8 @@ class K8sResourceManager {
 
           // Downscale the deployment or statefulset.
           await k8sAppApi[method]({
-            name: name,
-            namespace: namespace,
+            name,
+            namespace,
             body: {
               metadata: {
                 annotations: {
@@ -362,8 +362,8 @@ class K8sResourceManager {
         const suspended = resource.spec.suspend;
         if (!suspended) {
           await k8sBatchApi.patchNamespacedCronJob({
-            name: name,
-            namespace: namespace,
+            name,
+            namespace,
             body: {
               spec: {
                 suspend: true
@@ -402,8 +402,8 @@ class K8sResourceManager {
 
           // Upscale the deployment or statefulset.
           await k8sAppApi[method]({
-            name: name,
-            namespace: namespace,
+            name,
+            namespace,
             body: {
               metadata: {
                 annotations: {
@@ -423,8 +423,8 @@ class K8sResourceManager {
         const suspended = resource.spec.suspend;
         if (suspended) {
           await k8sBatchApi.patchNamespacedCronJob({
-            name: name,
-            namespace: namespace,
+            name,
+            namespace,
             body: {
               spec: {
                 suspend: false
@@ -498,14 +498,14 @@ class K8sResourceManager {
     try {
       
       // Query services in namespace with selector 'auto-downscale/redirected=true'
-      const services = await k8sApi.listNamespacedService({ namespace: namespace, labelSelector: 'auto-downscale/redirected=true' });
+      const services = await k8sApi.listNamespacedService({ namespace, labelSelector: 'auto-downscale/redirected=true' });
 
       // If no services point to it, delete silta-cluster-placeholder-upscaler-proxy deployment
       if (services.items.length === 0) {
  
         // Delete silta-cluster-placeholder-upscaler-proxy deployment only if it exists
         try {
-          await k8sAppApi.deleteNamespacedDeployment({ name: 'silta-cluster-placeholder-upscaler-proxy', namespace: namespace });
+          await k8sAppApi.deleteNamespacedDeployment({ name: 'silta-cluster-placeholder-upscaler-proxy', namespace });
           console.log(`Removed upscaler proxy in ${namespace}`);
         } catch (error) {
           // Skip error if deployment does not exist
