@@ -410,6 +410,9 @@ class K8sResourceManager {
                   'auto-downscale/original-replicas': null
                 }
               },
+              spec: {
+                replicas: originalReplicas
+              }
             }
           }, k8s.setHeaderOptions('Content-Type', k8s.PatchStrategy.MergePatch));
 
