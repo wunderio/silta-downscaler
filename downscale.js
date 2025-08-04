@@ -32,7 +32,7 @@ const placeholderProxyImage = process.env.PLACEHOLDER_PROXY_IMAGE;
   
   try {
 
-    const ingresses = (await k8sNetworkApi.listIngressForAllNamespaces()).body.items;
+    const ingresses = (await k8sNetworkApi.listIngressForAllNamespaces()).items;
     const selectedIngresses = ingresses
       .filter(ingress => ingress.metadata.annotations)
       .filter(ingress => ingress.metadata.annotations['auto-downscale/last-update'])
