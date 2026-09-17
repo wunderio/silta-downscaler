@@ -6,6 +6,17 @@ const k8sApi = kc.makeApiClient(k8s.CoreV1Api);
 const k8sNetworkApi = kc.makeApiClient(k8s.NetworkingV1Api);
 const k8sBatchApi = kc.makeApiClient(k8s.BatchV1Api);
 const k8sAppApi = kc.makeApiClient(k8s.AppsV1Api);
+const k8sCustomApi = kc.makeApiClient(k8s.CustomObjectsApi);
+const k8sApisApi = kc.makeApiClient(k8s.ApisApi);
+
+const mariadbGroup = 'k8s.mariadb.com';
+const mariadbPlural = 'mariadbs';
+
+// The error shape differs between @kubernetes/client-node versions:
+// 1.x throws an ApiException with .code, older versions expose .response.statusCode
+function isNotFoundError(error) {
+  return !!error && (error.code === 404 || (error.response && error.response.statusCode === 404));
+}
 
 const placeholderServiceName = process.env.PLACEHOLDER_SERVICE_NAME;
 const placeholderServiceNamespace = process.env.PLACEHOLDER_SERVICE_NAMESPACE;
@@ -438,6 +449,167 @@ class K8sResourceManager {
     }
     catch (error) {
       console.error(`Error while downscaling ${kind} ${namespace}/${name}`, error.message);
+    }
+  };
+
+  // Resolve the API version currently served for the mariadb group via API
+  // discovery, so the version does not have to be hardcoded and the code keeps
+  // working if the operator advances to a newer version (e.g. v1beta1 or v1).
+  // Returns null when the group (i.e. the CRD) is not installed.
+  async resolveMariaDBVersion() {
+    try {
+      const apiGroupList = await k8sApisApi.getAPIVersions();
+      const group = (apiGroupList.groups || []).find(function (g) {
+        return g.name === mariadbGroup;
+      });
+      if (!group) {
+        return null;
+      }
+      if (group.preferredVersion && group.preferredVersion.version) {
+        return group.preferredVersion.version;
+      }
+      if (group.versions && group.versions.length) {
+        return group.versions[0].version;
+      }
+      return null;
+    }
+    catch (error) {
+      console.error("Error discovering served versions for API group " + mariadbGroup, error.message);
+      return null;
+    }
+  };
+
+  // Derive the API version to use for a MariaDB object from its own apiVersion
+  // (e.g. "k8s.mariadb.com/v1alpha1" becomes "v1alpha1"), falling back to discovery.
+  async mariadbVersionFor(mariadb) {
+    if (mariadb.apiVersion && mariadb.apiVersion.startsWith(mariadbGroup + "/")) {
+      return mariadb.apiVersion.substring(mariadbGroup.length + 1);
+    }
+    return await this.resolveMariaDBVersion();
+  };
+
+  // Look up MariaDB custom resources (k8s.mariadb.com) belonging to this release.
+  // The API version is resolved dynamically, so any served version works.
+  // Returns [] if the CRD does not exist or the release has no MariaDB resources.
+  async extractMariaDBsFromIngress(ingress) {
+    const mariadbs = [];
+    try {
+      const version = await this.resolveMariaDBVersion();
+      if (!version) {
+        // mariadb CRD not installed (or discovery failed) - nothing to manage
+        return [];
+      }
+
+      const labels = ingress.metadata.labels || {};
+      const namespace = ingress.metadata.namespace;
+      const labelSelectors = [
+        "release=" + labels["release"],
+        "app.kubernetes.io/instance=" + labels["app.kubernetes.io/instance"],
+      ];
+
+      for (const labelSelector of labelSelectors) {
+        let items;
+        try {
+          const result = await k8sCustomApi.listNamespacedCustomObject({
+            group: mariadbGroup,
+            version: version,
+            namespace: namespace,
+            plural: mariadbPlural,
+            labelSelector: labelSelector,
+          });
+          items = result.items;
+        }
+        catch (error) {
+          if (isNotFoundError(error)) {
+            // CRD does not exist (or the version is not served) - no MariaDB resources to manage
+            return [];
+          }
+          console.error("Error listing MariaDBs with labelSelector " + labelSelector + " in " + namespace, error.message);
+          continue;
+        }
+
+        for (const mariadb of items) {
+          if (!mariadbs.some(function (existing) {
+            return existing.metadata.uid === mariadb.metadata.uid;
+          })) {
+            mariadbs.push(mariadb);
+          }
+        }
+      }
+    }
+    catch (error) {
+      console.error("Error extracting MariaDBs from ingress " + ingress.metadata.name, error);
+    }
+    return mariadbs;
+  }
+
+  async suspendMariaDB(mariadb) {
+    const name = mariadb.metadata.name;
+    const namespace = mariadb.metadata.namespace;
+    try {
+      if (mariadb.spec && mariadb.spec.suspend === true) {
+        console.log("MariaDB " + namespace + "/" + name + " is already suspended, skipping");
+        return;
+      }
+
+      const version = await this.mariadbVersionFor(mariadb);
+      if (!version) {
+        console.error("Could not resolve API version for MariaDB " + namespace + "/" + name + ", skipping suspend");
+        return;
+      }
+
+      await k8sCustomApi.patchNamespacedCustomObject({
+        group: mariadbGroup,
+        version: version,
+        namespace: namespace,
+        plural: mariadbPlural,
+        name: name,
+        body: {
+          spec: {
+            suspend: true
+          }
+        }
+      }, k8s.setHeaderOptions("Content-Type", k8s.PatchStrategy.MergePatch));
+
+      console.log("Suspended MariaDB " + namespace + "/" + name);
+    }
+    catch (error) {
+      console.error("Error while suspending MariaDB " + namespace + "/" + name, error.message);
+    }
+  };
+
+  async unsuspendMariaDB(mariadb) {
+    const name = mariadb.metadata.name;
+    const namespace = mariadb.metadata.namespace;
+    try {
+      if (!mariadb.spec || mariadb.spec.suspend !== true) {
+        console.log("MariaDB " + namespace + "/" + name + " is not suspended, skipping");
+        return;
+      }
+
+      const version = await this.mariadbVersionFor(mariadb);
+      if (!version) {
+        console.error("Could not resolve API version for MariaDB " + namespace + "/" + name + ", skipping unsuspend");
+        return;
+      }
+
+      await k8sCustomApi.patchNamespacedCustomObject({
+        group: mariadbGroup,
+        version: version,
+        namespace: namespace,
+        plural: mariadbPlural,
+        name: name,
+        body: {
+          spec: {
+            suspend: false
+          }
+        }
+      }, k8s.setHeaderOptions("Content-Type", k8s.PatchStrategy.MergePatch));
+
+      console.log("Unsuspended MariaDB " + namespace + "/" + name);
+    }
+    catch (error) {
+      console.error("Error while unsuspending MariaDB " + namespace + "/" + name, error.message);
     }
   };
 
