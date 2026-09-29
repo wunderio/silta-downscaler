@@ -9,7 +9,7 @@ const k8sNetworkApi = kc.makeApiClient(k8s.NetworkingV1Api);
 const k8sResourceManager = require('./src/k8sResourceManager');
 
 const defaultMinAge = process.env.DEFAULT_MIN_AGE;
-const releaseMinAge = JSON.parse(process.env.RELEASE_MIN_AGE);
+const releaseMinAge = process.env.RELEASE_MIN_AGE ? JSON.parse(process.env.RELEASE_MIN_AGE) : {};
 const placeholderServiceName = process.env.PLACEHOLDER_SERVICE_NAME;
 const placeholderServiceNamespace = process.env.PLACEHOLDER_SERVICE_NAMESPACE;
 const placeholderProxyImage = process.env.PLACEHOLDER_PROXY_IMAGE;
@@ -54,6 +54,8 @@ const placeholderProxyImage = process.env.PLACEHOLDER_PROXY_IMAGE;
         return lastUpdate.add(...minAge.split(/(\d+)/).filter(match => match)).isBefore(moment());
       });
 
+    console.log(`Found ${selectedIngresses.length} ingresses to downscale`);
+    
     for (const ingress of selectedIngresses) {
       const annotations = ingress.metadata.annotations;
       const name = ingress.metadata.name;
@@ -63,6 +65,13 @@ const placeholderProxyImage = process.env.PLACEHOLDER_PROXY_IMAGE;
       await k8sResourceManager.redirectService(serviceName, namespace);
       await k8sResourceManager.markIngressAsDown(name, namespace);
       const {deployments, cronjobs, statefulsets} = await k8sResourceManager.extractScalableResourcesFromIngress(ingress);
+
+      // Suspend MariaDBs (if any) before scaling their statefulsets to 0
+      const mariadbs = await k8sResourceManager.extractMariaDBsFromIngress(ingress);
+      for (const mariadb of mariadbs) {
+        await k8sResourceManager.suspendMariaDB(mariadb);
+      }
+
       for (const deployment of deployments) {
         await k8sResourceManager.downscaleResource(deployment, "deployment");
       }

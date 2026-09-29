@@ -46,6 +46,7 @@ app.post('/upscale', async (req, res) => {
         const serviceName = ingress.metadata.annotations['auto-downscale/services'];
 
         const {deployments, cronjobs, statefulsets} = await k8sResourceManager.extractScalableResourcesFromIngress(ingress);
+        const mariadbs = await k8sResourceManager.extractMariaDBsFromIngress(ingress);
 
         await Promise.all([
           ...deployments.map(deployment => k8sResourceManager.upscaleResource(deployment, 'deployment')),
@@ -53,6 +54,11 @@ app.post('/upscale', async (req, res) => {
           ...statefulsets.map(statefulset => k8sResourceManager.upscaleResource(statefulset, 'statefulset')),
           k8sResourceManager.updateIngressLastUpdate(name, namespace)
         ]);
+
+        // Unsuspend MariaDBs
+        for (const mariadb of mariadbs) {
+          await k8sResourceManager.unsuspendMariaDB(mariadb);
+        }
 
         // TODO: update ingress and switch service only after all resources are ready?
 
